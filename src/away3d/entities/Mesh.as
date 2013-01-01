@@ -213,6 +213,7 @@
 			clone.bounds = _bounds.clone();
 			clone.name = name;
 			clone.castsShadows = castsShadows;
+			clone.mouseEnabled = mouseEnabled;
 
 			var len : int = _subMeshes.length;
 			for (var i : int = 0; i < len; ++i) {
