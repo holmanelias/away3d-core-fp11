@@ -3,8 +3,9 @@ package away3d.materials.methods
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.events.ShadingMethodEvent;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterData;
+	import away3d.materials.compilation.ShaderRegisterElement;
 	import away3d.textures.Texture2DBase;
 
 	use namespace arcane;
@@ -15,7 +16,7 @@ package away3d.materials.methods
 	 */
 	public class CompositeDiffuseMethod extends BasicDiffuseMethod
 	{
-		private var _baseDiffuseMethod : BasicDiffuseMethod;
+		protected var _baseDiffuseMethod : BasicDiffuseMethod;
 
 		/**
 		 * Creates a new WrapDiffuseMethod object.
@@ -117,9 +118,9 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		override arcane function getFragmentCodePerLight(vo : MethodVO, lightIndex : int, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
+		override arcane function getFragmentCodePerLight(vo : MethodVO, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
 		{
-			var code : String = _baseDiffuseMethod.getFragmentCodePerLight(vo, lightIndex, lightDirReg, lightColReg, regCache);
+			var code : String = _baseDiffuseMethod.getFragmentCodePerLight(vo, lightDirReg, lightColReg, regCache);
 			_totalLightColorReg = _baseDiffuseMethod._totalLightColorReg;
 			return code;
 		}
@@ -128,9 +129,9 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function getFragmentCodePerProbe(vo : MethodVO, lightIndex : int, cubeMapReg : ShaderRegisterElement, weightRegister : String, regCache : ShaderRegisterCache) : String
+		arcane override function getFragmentCodePerProbe(vo : MethodVO, cubeMapReg : ShaderRegisterElement, weightRegister : String, regCache : ShaderRegisterCache) : String
 		{
-			var code : String = _baseDiffuseMethod.getFragmentCodePerProbe(vo, lightIndex, cubeMapReg, weightRegister, regCache);
+			var code : String = _baseDiffuseMethod.getFragmentCodePerProbe(vo, cubeMapReg, weightRegister, regCache);
 			_totalLightColorReg = _baseDiffuseMethod._totalLightColorReg;
 			return code;
 		}
@@ -182,79 +183,15 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		override arcane function set globalPosReg(value : ShaderRegisterElement) : void
+		override arcane function set sharedRegisters(value : ShaderRegisterData) : void
 		{
-			_baseDiffuseMethod.globalPosReg = _globalPosReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set UVFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_baseDiffuseMethod.UVFragmentReg = _uvFragmentReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set secondaryUVFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_baseDiffuseMethod.secondaryUVFragmentReg = _secondaryUVFragmentReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function get viewDirFragmentReg() : ShaderRegisterElement
-		{
-			return _viewDirFragmentReg;
-		}
-
-		override arcane function set viewDirFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_baseDiffuseMethod.viewDirFragmentReg = _viewDirFragmentReg = value;
-		}
-
-		override public function set viewDirVaryingReg(value : ShaderRegisterElement) : void
-		{
-			_viewDirVaryingReg = _baseDiffuseMethod.viewDirVaryingReg = value;
-		}
-
-
-		arcane override function set projectionReg(value : ShaderRegisterElement) : void
-		{
-			_projectionReg = _baseDiffuseMethod.projectionReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function get normalFragmentReg() : ShaderRegisterElement
-		{
-			return _normalFragmentReg;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set normalFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_baseDiffuseMethod.normalFragmentReg = _normalFragmentReg = value;
+			super.sharedRegisters = _baseDiffuseMethod.sharedRegisters = value;
 		}
 
 		override arcane function set shadowRegister(value : ShaderRegisterElement) : void
 		{
-
 			super.shadowRegister = value;
 			_baseDiffuseMethod.shadowRegister = value;
-		}
-
-
-		override arcane function set tangentVaryingReg(value : ShaderRegisterElement) : void
-		{
-			super.tangentVaryingReg = value;
-			_baseDiffuseMethod.tangentVaryingReg = value;
 		}
 
 		private function onShaderInvalidated(event : ShadingMethodEvent) : void

@@ -1,21 +1,24 @@
 package away3d.tools.helpers
 {
-	import away3d.materials.utils.DefaultMaterialManager;
+	import flash.geom.Matrix3D;
+	import flash.geom.Vector3D;
+	import flash.utils.Dictionary;
+	
 	import away3d.arcane;
 	import away3d.containers.ObjectContainer3D;
+	import away3d.core.base.CompactSubGeometry;
 	import away3d.core.base.Geometry;
+	import away3d.core.base.ISubGeometry;
 	import away3d.core.base.Object3D;
 	import away3d.core.base.SubGeometry;
+	import away3d.core.base.data.UV;
 	import away3d.core.base.data.Vertex;
 	import away3d.entities.Mesh;
 	import away3d.materials.MaterialBase;
 	import away3d.materials.TextureMaterial;
+	import away3d.materials.utils.DefaultMaterialManager;
 	import away3d.textures.BitmapTexture;
 	import away3d.tools.utils.Bounds;
-	 
-	import flash.geom.Matrix3D;
-	import flash.geom.Vector3D;
-	import flash.utils.Dictionary;
 
 	use namespace arcane;
 	
@@ -103,7 +106,7 @@ package away3d.tools.helpers
 		public static function applyRotations(mesh:Mesh):void
 		{
 			var geometry:Geometry = mesh.geometry;
-			var geometries:Vector.<SubGeometry> = geometry.subGeometries;
+			var geometries:Vector.<ISubGeometry> = geometry.subGeometries;
 			var numSubGeoms:int = geometries.length;
 			var vertices:Vector.<Number>;
 			var normals:Vector.<Number>;
@@ -113,11 +116,11 @@ package away3d.tools.helpers
 			var holder:Vector3D = new Vector3D();
 			var yind:uint;
 			var zind:uint;
-			var subGeom:SubGeometry;
+			var subGeom:CompactSubGeometry;
 			var updateNormals:Boolean;
 			
-			for (var i :uint = 0; i<numSubGeoms; ++i){
-					subGeom = SubGeometry(geometries[i]);
+			for (var i :uint = 0; i<numSubGeoms; ++i) {
+					subGeom = CompactSubGeometry(geometries[i]);
 					vertices = subGeom.vertexData;
 					normals = subGeom.vertexNormalData;
 					verticesLength = vertices.length;
@@ -143,8 +146,8 @@ package away3d.tools.helpers
 							normals[zind] = holder.z;
 						}
 					}
-					subGeom.updateVertexData(vertices);
-					if(updateNormals) subGeom.updateVertexNormalData(normals);
+					//subGeom.updateVertexData(vertices);
+					//if(updateNormals) subGeom.updateVertexNormalData(normals);
 			}
 			mesh.rotationX = mesh.rotationY = mesh.rotationZ = 0; 
 		}
@@ -186,7 +189,7 @@ package away3d.tools.helpers
 				return;
 			}
 			 
-			var geometries:Vector.<SubGeometry> = mesh.geometry.subGeometries;
+			var geometries:Vector.<ISubGeometry> = mesh.geometry.subGeometries;
 			var numSubGeoms:int = geometries.length;
 			var vertices:Vector.<Number>;
 			var len: uint;
@@ -248,7 +251,7 @@ package away3d.tools.helpers
 		public static function applyPosition(mesh:Mesh, dx:Number, dy:Number, dz:Number):void
 		{
 			var geometry:Geometry = mesh.geometry;
-			var geometries:Vector.<SubGeometry> = geometry.subGeometries;
+			var geometries:Vector.<ISubGeometry> = geometry.subGeometries;
 			var numSubGeoms:int = geometries.length;
 			var vertices:Vector.<Number>;
 			var verticesLength: uint;
@@ -314,7 +317,7 @@ package away3d.tools.helpers
 		*/
 		public static function invertFaces(mesh:Mesh, invertU:Boolean = false):void
 		{
-			var subGeometries:Vector.<SubGeometry> = mesh.geometry.subGeometries;
+			var subGeometries:Vector.<ISubGeometry> = mesh.geometry.subGeometries;
 			var numSubGeoms:uint = subGeometries.length;
 			var indices:Vector.<uint>;
 			var normals:Vector.<Number>;
@@ -391,7 +394,11 @@ package away3d.tools.helpers
 			var defaultUVS:Vector.<Number> = Vector.<Number>([0, 1, .5, 0, 1, 1, .5, 0]);
 			var uvid:uint = 0;
 			 
-			if(shareVertices) var dShared:Dictionary = new Dictionary();
+			if(shareVertices){
+				var dShared:Dictionary = new Dictionary();
+				var uv:UV = new UV();
+				var ref:String;
+			}
 			
 			var uvind:uint;
 			var vind:uint;
@@ -421,7 +428,7 @@ package away3d.tools.helpers
 					subGeom.autoDeriveVertexTangents = true;
 					geometry.addSubGeometry(subGeom);
 
-					uvind = uvid = 0;
+					uvid = 0;
 					
 					nvertices = new Vector.<Number>();
 					nindices = new Vector.<uint>();
@@ -429,14 +436,17 @@ package away3d.tools.helpers
 				}
 				
 				vind = nvertices.length/3;
-				uvind = vind*2;
+				uvind = indices[i]*2;
 				
 				if(shareVertices){
-					if(dShared[vertex.toString()]){
-						nindices[nindices.length] = dShared[vertex.toString()];
+					uv.u = uvs[uvind];
+					uv.v = uvs[uvind+1];
+					ref = vertex.toString()+uv.toString();
+					if(dShared[ref]){
+						nindices[nindices.length] = dShared[ref];
 						continue;
 					}
-					dShared[vertex.toString()] = vind;
+					dShared[ref] = vind;
 				}
 				
 				nindices[nindices.length] = vind;
@@ -447,7 +457,6 @@ package away3d.tools.helpers
 					uvid = (uvid+2>3)? 0 : uvid+=2;
 					
 				} else {
-					
 					nuvs.push(uvs[uvind], uvs[uvind+1]); 
 				}
 			}
@@ -471,7 +480,7 @@ package away3d.tools.helpers
 		public static function splitMesh(mesh:Mesh, disposeSource:Boolean = false) : Vector.<Mesh>
 		{
 			var meshes:Vector.<Mesh> = new Vector.<Mesh>();
-			var geometries:Vector.<SubGeometry> = mesh.geometry.subGeometries;
+			var geometries:Vector.<ISubGeometry> = mesh.geometry.subGeometries;
 			var numSubGeoms:uint = geometries.length;
 			
 			if(numSubGeoms == 1){
@@ -494,7 +503,7 @@ package away3d.tools.helpers
 			var j : uint = 0;
 			
 			for (var i : uint = 0; i < numSubGeoms; ++i){
-				subGeom = geometries[i];
+				subGeom = SubGeometry(geometries[i]);
 				vertices = subGeom.vertexData;
 				indices = subGeom.indexData;
 				uvs = subGeom.UVData;

@@ -1,17 +1,20 @@
 package away3d.animators
 {
-	import away3d.animators.*;
-	import away3d.animators.data.*;
-	import away3d.core.managers.*;
-	import away3d.materials.passes.*;
+	import away3d.animators.data.VertexAnimationMode;
+	import away3d.arcane;
+	import away3d.core.managers.Stage3DProxy;
+	import away3d.materials.passes.MaterialPassBase;
+
+	import flash.display3D.Context3D;
 
 	import flash.utils.Dictionary;
+
+	use namespace arcane;
 
 	/**
 	 * The animation data set used by vertex-based animators, containing vertex animation state data.
 	 * 
 	 * @see away3d.animators.VertexAnimator
-	 * @see away3d.animators.VertexAnimationState
 	 */
 	public class VertexAnimationSet extends AnimationSetBase implements IAnimationSet
 	{
@@ -66,7 +69,7 @@ package away3d.animators
 		/**
 		 * @inheritDoc
 		 */
-		public function getAGALVertexCode(pass : MaterialPassBase, sourceRegisters : Array, targetRegisters : Array) : String
+		public function getAGALVertexCode(pass : MaterialPassBase, sourceRegisters : Vector.<String>, targetRegisters : Vector.<String>) : String
 		{
 			if (_blendMode == VertexAnimationMode.ABSOLUTE)
 				return getAbsoluteAGALCode(pass, sourceRegisters, targetRegisters);
@@ -90,27 +93,42 @@ package away3d.animators
 		public function deactivate(stage3DProxy : Stage3DProxy, pass : MaterialPassBase) : void
 		{
 			var index : int = _streamIndices[pass];
-			stage3DProxy.setSimpleVertexBuffer(index, null, null);
+			var context : Context3D = stage3DProxy._context3D;
+			context.setVertexBufferAt(index, null);
 			if (_uploadNormals)
-				stage3DProxy.setSimpleVertexBuffer(index + 1, null, null);
+				context.setVertexBufferAt(index + 1, null);
 			if (_uploadTangents)
-				stage3DProxy.setSimpleVertexBuffer(index + 2, null, null);
+				context.setVertexBufferAt(index + 2, null);
 		}
 		
 		/**
 		 * @inheritDoc
 		 */
-		public override function addState(stateName:String, animationState:IAnimationState):void
+		public function getAGALFragmentCode(pass : MaterialPassBase, shadedTarget : String) : String
 		{
-			super.addState(stateName, animationState);
+			return "";
+		}
+		
+		/**
+		 * @inheritDoc
+		 */
+		public function getAGALUVCode(pass : MaterialPassBase, UVSource : String, UVTarget:String) : String
+		{
+			return "mov " + UVTarget + "," + UVSource + "\n";
+		}
+		
+		/**
+		 * @inheritDoc
+		 */
+		public function doneAGALCode(pass : MaterialPassBase):void
+		{
 			
-			animationState.addOwner(this, stateName);
 		}
 		
 		/**
 		 * Generates the vertex AGAL code for absolute blending.
 		 */
-		private function getAbsoluteAGALCode(pass : MaterialPassBase, sourceRegisters : Array, targetRegisters : Array) : String
+		private function getAbsoluteAGALCode(pass : MaterialPassBase, sourceRegisters : Vector.<String>, targetRegisters : Vector.<String>) : String
 		{
 			var code : String = "";
 			var temp1 : String = findTempReg(targetRegisters);
@@ -151,7 +169,7 @@ package away3d.animators
 		/**
 		 * Generates the vertex AGAL code for additive blending.
 		 */
-		private function getAdditiveAGALCode(pass : MaterialPassBase, sourceRegisters : Array, targetRegisters : Array) : String
+		private function getAdditiveAGALCode(pass : MaterialPassBase, sourceRegisters : Vector.<String>, targetRegisters : Vector.<String>) : String
 		{
 			var code : String = "";
 			var len : uint = sourceRegisters.length;

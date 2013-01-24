@@ -31,6 +31,7 @@ package away3d.entities
 		
 		arcane var _pickingCollisionVO:PickingCollisionVO;
 		arcane var _pickingCollider:IPickingCollider;
+		arcane var _staticNode:Boolean;
 
 		protected var _mvpTransformStack : Vector.<Matrix3D> = new Vector.<Matrix3D>();
 		protected var _zIndices : Vector.<Number> = new Vector.<Number>();
@@ -38,7 +39,14 @@ package away3d.entities
 		protected var _stackLen : uint;
 		protected var _bounds : BoundingVolumeBase;
 		protected var _boundsInvalid : Boolean = true;
-		
+
+
+		override public function set ignoreTransform(value : Boolean) : void
+		{
+			if (_scene) _scene.invalidateEntityBounds(this);
+			super.ignoreTransform = value;
+		}
+
 		/**
 		 * Used by the shader-based picking system to determine whether a separate render pass is made in order
 		 * to offer more details for the picking collision object, including local position, normal vector and uv value.
@@ -55,7 +63,21 @@ package away3d.entities
 		{
 			_shaderPickingDetails = value;
 		}
-		
+
+		/**
+		 * Defines whether or not the object will be moved or animated at runtime. This property is used by some partitioning systems to improve performance.
+		 * Warning: if set to true, they may not be processed by certain partition systems using static visibility lists, unless they're specifically assigned to the visibility list.
+		 */
+		public function get staticNode() : Boolean
+		{
+			return _staticNode;
+		}
+
+		public function set staticNode(value : Boolean) : void
+		{
+			_staticNode = value;
+		}
+
 		/**
 		 * Returns a unique picking collision value object for the entity.
 		 */
@@ -97,7 +119,7 @@ package away3d.entities
 			else 
 				removeBounds();
 		}
-		
+
 		/**
 		 * @inheritDoc
 		 */
@@ -275,18 +297,28 @@ package away3d.entities
 		 * and places it on the stack. The stack allows nested rendering while keeping the MVP intact.
 		 * @param camera The camera which will perform the view transformation and projection.
 		 */
-		public function pushModelViewProjection(camera : Camera3D) : void
+		public function pushModelViewProjection(camera : Camera3D, updateZIndex : Boolean = true) : void
 		{
-			if (++_mvpIndex == _stackLen) {
-				_mvpTransformStack[_mvpIndex] = new Matrix3D();
-				_stackLen++;
+			var mvp : Matrix3D;
+
+			++_mvpIndex;
+
+			if  (_ignoreTransform)
+				mvp = _mvpTransformStack[_mvpIndex] = camera.viewProjection;
+			else {
+				if (_mvpIndex == _stackLen) {
+					_mvpTransformStack[_mvpIndex] = new Matrix3D();
+					++_stackLen;
+				}
+				mvp = _mvpTransformStack[_mvpIndex];
+				mvp.copyFrom(sceneTransform);
+				mvp.append(camera.viewProjection);
 			}
 
-			var mvp : Matrix3D = _mvpTransformStack[_mvpIndex];
-			mvp.copyFrom(sceneTransform);
-			mvp.append(camera.viewProjection);
-			mvp.copyColumnTo(3, _pos);
-			_zIndices[_mvpIndex] = -_pos.z;
+			if (updateZIndex) {
+				mvp.copyColumnTo(3, _pos);
+				_zIndices[_mvpIndex] = -_pos.z;
+			}
 		}
 		
 		/**
@@ -348,11 +380,13 @@ package away3d.entities
 		 */
 		override protected function invalidateSceneTransform() : void
 		{
-			super.invalidateSceneTransform();
-			
-			notifySceneBoundsInvalid();
+			if (!_ignoreTransform) {
+				super.invalidateSceneTransform();
+
+				notifySceneBoundsInvalid();
+			}
 		}
-		
+
 		/**
 		 * Invalidates the bounding volume, causing to be updated when requested.
 		 */

@@ -5,8 +5,8 @@ package away3d.materials.methods
 	import away3d.core.base.IRenderable;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.entities.TextureProjector;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 
 	import flash.display3D.Context3DProgramType;
 	import flash.geom.Matrix3D;
@@ -123,8 +123,8 @@ package away3d.materials.methods
 
 			code += "div " + col + ", " + _uvVarying + ", " + _uvVarying + ".w						\n" +
 					"mul " + col + ".xy, " + col + ".xy, " + toTexReg+".xy	\n" +
-					"add " + col + ".xy, " + col + ".xy, " + toTexReg+".xx	\n" +
-					"tex " + col + ", " + col + ", " + mapRegister + " <2d,linear,miplinear,clamp>\n";
+					"add " + col + ".xy, " + col + ".xy, " + toTexReg+".xx	\n";
+			code += getTex2DSampleCode(vo, col, mapRegister, _projector.texture, col, "clamp");
 
 			if (_mode == MULTIPLY)
 				code += "mul " + targetReg + ".xyz, " + targetReg + ".xyz, " + col + ".xyz			\n";

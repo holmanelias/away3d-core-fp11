@@ -2,8 +2,8 @@ package away3d.materials.methods
 {
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 
 	import flash.display3D.Context3DProgramType;
 
@@ -21,7 +21,6 @@ package away3d.materials.methods
 		{
 			super();
 		}
-
 
 		override arcane function initConstants(vo : MethodVO) : void
 		{
@@ -59,9 +58,11 @@ package away3d.materials.methods
 			vo.texturesIndex = _diffuseInputRegister.index;
 			decReg = regCache.getFreeFragmentConstant();
 			vo.fragmentConstantsIndex = decReg.index*4;
-			code += getTexSampleCode(vo, temp, _diffuseInputRegister) +
+			code += getTex2DSampleCode(vo, temp, _diffuseInputRegister, texture) +
 					"dp4 " + temp + ".x, " + temp + ", "+ decReg + "\n" +
-					"mov " + temp + ".yzw, " + temp + ".xxx			\n";
+					"mov " + temp + ".yz, " + temp + ".xx			\n" +
+					"mov " + temp + ".w, " + decReg + ".x\n" +
+					"sub " + temp + ".xyz, " + decReg + ".xxx, " + temp + ".xyz\n";
 
 			if (vo.numLights == 0)
 				return code;

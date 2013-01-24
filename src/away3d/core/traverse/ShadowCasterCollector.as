@@ -4,7 +4,11 @@ package away3d.core.traverse
 	import away3d.core.base.IRenderable;
 	import away3d.core.data.RenderableListItem;
 	import away3d.entities.Entity;
+	import away3d.lights.DirectionalLight;
 	import away3d.lights.LightBase;
+	import away3d.lights.LightProbe;
+	import away3d.lights.PointLight;
+	import away3d.materials.MaterialBase;
 
 	use namespace arcane;
 
@@ -23,13 +27,7 @@ package away3d.core.traverse
 		 */
 		public function ShadowCasterCollector()
 		{
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override public function applySkyBox(renderable : IRenderable) : void
-		{
+			super();
 		}
 
 		/**
@@ -39,22 +37,21 @@ package away3d.core.traverse
 		override public function applyRenderable(renderable : IRenderable) : void
 		{
 			// the test for material is temporary, you SHOULD be hammered with errors if you try to render anything without a material
-			if (renderable.castsShadows && renderable.material) {
-				_numOpaques++;
+			var material : MaterialBase = renderable.material;
+			if (renderable.castsShadows && material) {
 				var item : RenderableListItem = _renderableListItemPool.getItem();
 				item.renderable = renderable;
 				item.next = _opaqueRenderableHead;
 				item.zIndex = renderable.zIndex;
-				item.renderOrderId = renderable.material._uniqueId;
+				item.renderOrderId = material._depthPassId;
 				_opaqueRenderableHead = item;
 			}
 		}
 
-		/**
-		 * @inheritDoc
-		 */
-		override public function applyUnknownLight(light : LightBase) : void
-		{
-		}
+		override public function applyUnknownLight(light : LightBase) : void {}
+		override public function applyDirectionalLight(light : DirectionalLight) : void {}
+		override public function applyPointLight(light : PointLight) : void {}
+		override public function applyLightProbe(light : LightProbe) : void {}
+		override public function applySkyBox(renderable : IRenderable) : void {}
 	}
 }

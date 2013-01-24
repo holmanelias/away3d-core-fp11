@@ -51,23 +51,16 @@ package away3d.core.pick
 		/**
 		 * @inheritDoc
 		 */
-		public function testSubMeshCollision(subMesh:SubMesh, pickingCollisionVO:PickingCollisionVO, shortestCollisionDistance:Number):Boolean
+		public function testSubMeshCollision(subMesh:SubMesh, pickingCollisionVO:PickingCollisionVO, shortestCollisionDistance:Number, ignoreFacesLookingAway:Boolean):Boolean
 		{
-			// TODO: It seems that the kernel takes almost the same time to calculate on a mesh with 2 triangles than on a
-			// mesh with thousands of triangles. It might be worth exploring the possibility of accumulating buffers until a certain
-			// threshold is met, and then running the kernel on a group of meshes.
-
 			var cx:Number, cy:Number, cz:Number;
 			var u:Number, v:Number, w:Number;
 			var indexData:Vector.<uint> = subMesh.indexData;
-			var vertexData:Vector.<Number> = subMesh.vertexData;
+			var vertexData:Vector.<Number> = subMesh.subGeometry.vertexPositionData;
 			var uvData:Vector.<Number> = subMesh.UVData;
 			var numericIndexData:Vector.<Number> = Vector.<Number>( indexData );
 			var indexBufferDims:Point = evaluateArrayAsGrid( numericIndexData );
-			
-			// if working on a clone, no need to resend data to pb
-			// TODO: next line avoids re-upload if its the same renderable, but not if its 2 renderables referring to the same geometry or source
-			// TODO: perhaps implement a geom id?
+
 			if( !_lastSubMeshUploaded || _lastSubMeshUploaded !== subMesh ) {
 				// send vertices to pb
 				var duplicateVertexData:Vector.<Number> = vertexData.concat();
@@ -76,6 +69,7 @@ package away3d.core.pick
 				_rayTriangleKernel.data.vertexBuffer.height = vertexBufferDims.y;
 				_rayTriangleKernel.data.vertexBufferWidth.value = [ vertexBufferDims.x ];
 				_rayTriangleKernel.data.vertexBuffer.input = duplicateVertexData;
+				_rayTriangleKernel.data.ignoreFacesLookingAway.value = [ ignoreFacesLookingAway ? 1.0 : 0.0 ];
 	
 				// send indices to pb
 				_rayTriangleKernel.data.indexBuffer.width = indexBufferDims.x;
@@ -87,7 +81,7 @@ package away3d.core.pick
 			
 			// run kernel.
 			var shaderJob:ShaderJob = new ShaderJob( _rayTriangleKernel, _kernelOutputBuffer, indexBufferDims.x, indexBufferDims.y );
-			shaderJob.start( true ); // TODO: performance test, use false and listen for completion? affects the whole picking system
+			shaderJob.start( true );
 
 			// find a proper collision from pb's output
 			var i:uint;
@@ -118,7 +112,7 @@ package away3d.core.pick
 				v = _kernelOutputBuffer[ collisionTriangleIndex + 1 ]; // barycentric coord 1
 				w = _kernelOutputBuffer[ collisionTriangleIndex + 2 ]; // barycentric coord 2
 				u = 1.0 - v - w;
-				pickingCollisionVO.uv = getCollisionUV( indexData, uvData, collisionTriangleIndex, v, w, u );
+				pickingCollisionVO.uv = getCollisionUV( indexData, uvData, collisionTriangleIndex, v, w, u, 0, 2 );
 				
 				return true;
 			}
@@ -126,7 +120,6 @@ package away3d.core.pick
 			return false;
 		}
 		
-		// TODO: this is not necessarily the most efficient way to pass data to pb ( try different grid dimensions? )
 		private function evaluateArrayAsGrid( array:Vector.<Number> ):Point {
 			var count:uint = array.length / 3;
 			var w:uint = Math.floor( Math.sqrt( count ) );

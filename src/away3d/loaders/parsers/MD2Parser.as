@@ -1,23 +1,18 @@
 package away3d.loaders.parsers
 {
-	import away3d.materials.utils.DefaultMaterialManager;
-	import away3d.animators.nodes.VertexClipNode;
-	import away3d.animators.VertexAnimationState;
-	import away3d.animators.VertexAnimationSet;
-	import flash.utils.Dictionary;
-	import away3d.arcane;
-	import away3d.core.base.Geometry;
-	import away3d.core.base.SubGeometry;
-	import away3d.entities.Mesh;
-	import away3d.loaders.misc.ResourceDependency;
-	import away3d.loaders.parsers.utils.ParserUtil;
-	import away3d.materials.TextureMaterial;
-	import away3d.textures.BitmapTexture;
-	import away3d.textures.Texture2DBase;
+	import flash.net.*;
+	import flash.utils.*;
 	
-	import flash.net.URLRequest;
-	import flash.utils.ByteArray;
-	import flash.utils.Endian;
+	import away3d.*;
+	import away3d.animators.*;
+	import away3d.animators.nodes.*;
+	import away3d.core.base.*;
+	import away3d.entities.*;
+	import away3d.loaders.misc.*;
+	import away3d.loaders.parsers.utils.*;
+	import away3d.materials.*;
+	import away3d.materials.utils.*;
+	import away3d.textures.*;
 
 	use namespace arcane;
 	
@@ -60,7 +55,7 @@ package away3d.loaders.parsers
 		
 		// the current subgeom being built
 		private var _animationSet : VertexAnimationSet = new VertexAnimationSet();
-		private var _firstSubGeom : SubGeometry;
+		private var _firstSubGeom : CompactSubGeometry;
 		private var _uvs : Vector.<Number>;
 		private var _finalUV : Vector.<Number>;
 		
@@ -355,19 +350,18 @@ package away3d.loaders.parsers
 			var sx : Number, sy : Number, sz : Number;
 			var tx : Number, ty : Number, tz : Number;
 			var geometry : Geometry;
-			var subGeom : SubGeometry;
+			var subGeom : CompactSubGeometry;
 			var vertLen : uint = _vertIndices.length;
 			var fvertices : Vector.<Number>;
 			var tvertices : Vector.<Number>;
 			var i : uint, j : int, k : uint, ch : uint;
 			var name : String = "";
 			var prevClip : VertexClipNode = null;
-			var state : VertexAnimationState;
 			
 			_byteData.position = _offsetFrames;
 			
 			for (i = 0; i < _numFrames; i++) {
-				subGeom = new SubGeometry();
+				subGeom = new CompactSubGeometry();
 				_firstSubGeom ||= subGeom;
 				geometry = new Geometry();
 				geometry.addSubGeometry(subGeom);
@@ -396,11 +390,14 @@ package away3d.loaders.parsers
 					fvertices[k++] = tvertices[uint(_vertIndices[j] * 3 + 2)];
 					fvertices[k++] = tvertices[uint(_vertIndices[j] * 3 + 1)];
 				}
-				
-				subGeom.updateVertexData(fvertices);
-				subGeom.updateUVData(_finalUV);
+
+				subGeom.fromVectors(fvertices, _finalUV, null, null);
 				subGeom.updateIndexData(_indices);
-				
+				subGeom.vertexNormalData;
+				subGeom.vertexTangentData;
+				subGeom.autoDeriveVertexNormals = false;
+				subGeom.autoDeriveVertexTangents = false;
+
 				var clip : VertexClipNode = _clipNodes[name];
 				
 				if (!clip) {
@@ -409,14 +406,13 @@ package away3d.loaders.parsers
 					// hence be finalized.
 					if (prevClip) {
 						finalizeAsset(prevClip);
-						finalizeAsset(state);
+						_animationSet.addAnimation(prevClip);
 					}
 						
 					clip = new VertexClipNode();
+					clip.name = name;
 					clip.stitchFinalFrame = true;
-					state = new VertexAnimationState(clip);
 					
-					_animationSet.addState(name, state);
 					_clipNodes[name] = clip;
 					
 					prevClip = clip;
@@ -427,11 +423,10 @@ package away3d.loaders.parsers
 			// Finalize the last state
 			if (prevClip) {
 				finalizeAsset(prevClip);
-				finalizeAsset(state);
+				_animationSet.addAnimation(prevClip);
 			}
 			
 			// Force finalizeAsset() to decide name
-			//_animator.name = "";
 			finalizeAsset(_animationSet);
 			
 			_parsedFrames = true;
@@ -457,9 +452,8 @@ package away3d.loaders.parsers
 
 		private function createDefaultSubGeometry() : void
 		{
-			var sub : SubGeometry = new SubGeometry();
-			sub.updateVertexData(_firstSubGeom.vertexData);
-			sub.updateUVData(_firstSubGeom.UVData);
+			var sub : CompactSubGeometry = new CompactSubGeometry();
+			sub.updateData(_firstSubGeom.vertexData);
 			sub.updateIndexData(_indices);
 			_geometry.addSubGeometry(sub);
 		}

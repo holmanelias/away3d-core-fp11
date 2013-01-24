@@ -1,9 +1,11 @@
 package away3d.core.math
 {
-	import flash.geom.Point;
-	import flash.geom.Vector3D;
-	
 	import away3d.arcane;
+
+	import flash.geom.Matrix3D;
+
+	import flash.geom.Vector3D;
+	import flash.geom.Point;
 	import away3d.containers.View3D;
 
 	use namespace arcane;
@@ -128,27 +130,6 @@ package away3d.core.math
             else
 				return a*p.x + b*p.y + c*p.z - d;
 		}
-		
-		public function getCurrentIntersection(pt: Point, view: View3D) : Vector3D {
-			var direction:Vector3D = view.unproject(pt.x, pt.y);
-			var origin:Vector3D = new Vector3D(view.camera.x, view.camera.y, view.camera.z, 1);
-			direction = direction.subtract(origin);
-			direction.normalize();
-			return intersects(origin, direction);
-		}
-		
-		public function intersects(S: Vector3D, V: Vector3D) : Vector3D {
-			var L:Vector3D = new Vector3D(a, b, c, d);
-			var ldotV:Number = L.x * V.x + L.y * V.y + L.z * V.z + L.w * V.w;
-			var ldotS:Number = L.x * S.x + L.y * S.y + L.z * S.z + L.w * S.w;
-			//Vector is parallel to plane, they won't intersect, sad trombone sound
-			if(ldotV == 0) {
-				return null;
-			}
-			var t:Number = ldotS / ldotV;
-			V.scaleBy(t);
-			return S.add(V);
-		}
 
 		/**
 		 * Classify a point against this Plane3D. (in front, back or intersecting)
@@ -177,6 +158,29 @@ package away3d.core.math
 			else
 				return PlaneClassification.INTERSECT;
 		}
+		
+		public function getCurrentIntersection(pt: Point, view: View3D) : Vector3D {
+			var direction:Vector3D = view.unproject(pt.x, pt.y);
+			//var direction:Vector3D = view.getRay(pt.x, pt.y);
+			var origin:Vector3D = new Vector3D(view.camera.x, view.camera.y, view.camera.z, 1);
+			direction = direction.subtract(origin);
+			direction.normalize();
+			return intersects(origin, direction);
+		}
+		
+		public function intersects(S: Vector3D, V: Vector3D) : Vector3D {
+			var L:Vector3D = new Vector3D(a, b, c, d);
+			var ldotV:Number = L.x * V.x + L.y * V.y + L.z * V.z + L.w * V.w;
+			var ldotS:Number = L.x * S.x + L.y * S.y + L.z * S.z + L.w * S.w;
+			//Vector is parallel to plane, they won't intersect, sad trombone sound
+			if(ldotV == 0) {
+				return null;
+			}
+			var t:Number = ldotS / ldotV;
+			V.scaleBy(t);
+			return S.add(V);
+		}
+
 
 		public function toString() : String
 		{

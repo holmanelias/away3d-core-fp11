@@ -49,7 +49,7 @@
 		private var _backgroundColor : uint = 0x000000;
 		private var _backgroundAlpha : Number = 1;
 
-		private var _mouse3DManager : Mouse3DManager;
+		protected var _mouse3DManager : Mouse3DManager;
 		private var _stage3DManager : Stage3DManager;
 
 		protected var _renderer : RendererBase;
@@ -78,8 +78,10 @@
 		private var _menu0:ContextMenuItem;
 		private var _menu1:ContextMenuItem;
 		private var _ViewContextMenu:ContextMenu;
-		private var _shareContext:Boolean = false;
-		private var _viewScissoRect:Rectangle;
+		protected var _shareContext:Boolean = false;
+		protected var _viewScissorRect:Rectangle;
+
+		private var _depthPrepass:Boolean;
 		
 		private function viewSource(e:ContextMenuEvent):void 
 		{
@@ -90,8 +92,18 @@
 				
 			}
 		}
-		
-		private function visitWebsite(e:ContextMenuEvent):void 
+
+		public function get depthPrepass() : Boolean
+		{
+			return _depthPrepass;
+		}
+
+		public function set depthPrepass(value : Boolean) : void
+		{
+			_depthPrepass = value;
+		}
+
+		private function visitWebsite(e:ContextMenuEvent):void
 		{
 			var url:String = Away3D.WEBSITE_URL;
 			var request:URLRequest = new URLRequest(url);
@@ -137,7 +149,7 @@
 			// todo: entity collector should be defined by renderer
 			_entityCollector = _renderer.createEntityCollector();
 
-			_viewScissoRect = new Rectangle();
+			_viewScissorRect = new Rectangle();
 
 			initHitField();
 			
@@ -184,7 +196,7 @@
 			_localPos.y = _stage3DProxy.y;
 			_globalPos.y = parent? parent.localToGlobal(_localPos).y : _stage3DProxy.y;
 			
-			_viewScissoRect = new Rectangle(_stage3DProxy.x, _stage3DProxy.y, _stage3DProxy.width, _stage3DProxy.height);
+			_viewScissorRect = new Rectangle(_stage3DProxy.x, _stage3DProxy.y, _stage3DProxy.width, _stage3DProxy.height);
 		}
 
 		/**
@@ -407,7 +419,7 @@
 
 			_renderer.viewWidth = value;
 			
-			_viewScissoRect.width = value;
+			_viewScissorRect.width = value;
 
 			invalidateBackBuffer();
 		}
@@ -440,7 +452,7 @@
 
 			_renderer.viewHeight = value;
 
-			_viewScissoRect.height = value;
+			_viewScissorRect.height = value;
 			
 			invalidateBackBuffer();
 		}
@@ -452,7 +464,7 @@
 			
 			_localPos.x = value;
 			_globalPos.x = parent? parent.localToGlobal(_localPos).x : value;
-			_viewScissoRect.x = value;
+			_viewScissorRect.x = value;
 			
 			if (_stage3DProxy && !_shareContext)
 				_stage3DProxy.x = _globalPos.x;
@@ -464,7 +476,7 @@
 			
 			_localPos.y = value;
 			_globalPos.y = parent? parent.localToGlobal(_localPos).y : value;
-			_viewScissoRect.y = value;
+			_viewScissorRect.y = value;
 			
 			if (_stage3DProxy && !_shareContext)
 				_stage3DProxy.y = _globalPos.y;
@@ -592,32 +604,37 @@
 			_scene.traversePartitions(_entityCollector);
 
 			// update picking
-			_mouse3DManager.updateCollider(this);
-
-//			updateLights(_entityCollector);
+			//_mouse3DManager.updateCollider(this);
 
 			if (_requireDepthRender)
-				renderSceneDepth(_entityCollector);
+				renderSceneDepthToTexture(_entityCollector);
+
+			// todo: perform depth prepass after light update and before final render
+			if (_depthPrepass)
+				renderDepthPrepass(_entityCollector);
+
+			_renderer.clearOnRender = !_depthPrepass;
 
 			if (_filter3DRenderer && _stage3DProxy._context3D) {
 				_renderer.render(_entityCollector, _filter3DRenderer.getMainInputTexture(_stage3DProxy), _rttBufferManager.renderToTextureRect);
 				_filter3DRenderer.render(_stage3DProxy, camera, _depthRender);
-				if (!_shareContext) _stage3DProxy._context3D.present();
 			} else {
 				_renderer.shareContext = _shareContext;
-				if (_shareContext) {
-					_renderer.render(_entityCollector, null, _viewScissoRect);
-				} else {
+				if (_shareContext)
+					_renderer.render(_entityCollector, null, _viewScissorRect);
+				else
 					_renderer.render(_entityCollector);
-				}
-				
-			}
 
+			}
+			if (!_shareContext) stage3DProxy.present();
+			
+			// fire collected mouse events
+			_mouse3DManager.fireMouseEvents(this);
+			
+			
 			// clean up data for this render
 			_entityCollector.cleanUp();
 
-			// fire collected mouse events
-			_mouse3DManager.fireMouseEvents();
 		}
 
 		protected function updateGlobalPos() : void
@@ -636,7 +653,7 @@
 			_time = time;
 		}
 
-		private function updateViewSizeData() : void
+		protected function updateViewSizeData() : void
 		{
 			_camera.lens.aspectRatio = _aspectRatio;
 			_entityCollector.camera = _camera;
@@ -650,8 +667,24 @@
 				_renderer.textureRatioY = 1;
 			}
 		}
-		
-		protected function renderSceneDepth(entityCollector : EntityCollector) : void
+
+		protected function renderDepthPrepass(entityCollector : EntityCollector) : void
+		{
+			_depthRenderer.disableColor = true;
+			if (_filter3DRenderer || _renderer.renderToTexture) {
+				_depthRenderer.textureRatioX = _rttBufferManager.textureRatioX;
+				_depthRenderer.textureRatioY = _rttBufferManager.textureRatioY;
+				_depthRenderer.render(entityCollector, _filter3DRenderer.getMainInputTexture(_stage3DProxy), _rttBufferManager.renderToTextureRect);
+			}
+			else {
+				_depthRenderer.textureRatioX = 1;
+				_depthRenderer.textureRatioY = 1;
+				_depthRenderer.render(entityCollector);
+			}
+			_depthRenderer.disableColor = false;
+		}
+
+		protected function renderSceneDepthToTexture(entityCollector : EntityCollector) : void
 		{
 			if (_depthTextureInvalid || !_depthRender) initDepthTexture(_stage3DProxy._context3D);
 			_depthRenderer.textureRatioX = _rttBufferManager.textureRatioX;

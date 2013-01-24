@@ -3,9 +3,10 @@ package away3d.materials.methods
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.events.ShadingMethodEvent;
+	import away3d.materials.compilation.ShaderRegisterData;
 	import away3d.materials.passes.MaterialPassBase;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 	import away3d.textures.Texture2DBase;
 
 	use namespace arcane;
@@ -126,60 +127,9 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		override arcane function get normalFragmentReg() : ShaderRegisterElement
+		override arcane function set sharedRegisters(value : ShaderRegisterData) : void
 		{
-			return _baseSpecularMethod.normalFragmentReg;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set normalFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_normalFragmentReg = _baseSpecularMethod.normalFragmentReg = value;
-		}
-
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set globalPosReg(value : ShaderRegisterElement) : void
-		{
-			_baseSpecularMethod.globalPosReg = _globalPosReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set UVFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_baseSpecularMethod.UVFragmentReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set secondaryUVFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_baseSpecularMethod.secondaryUVFragmentReg = _secondaryUVFragmentReg = value;
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override arcane function set viewDirFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_viewDirFragmentReg = _baseSpecularMethod.viewDirFragmentReg = value;
-		}
-
-		arcane override function set projectionReg(value : ShaderRegisterElement) : void
-		{
-			_projectionReg = _baseSpecularMethod.projectionReg = value;
-		}
-
-		override public function set viewDirVaryingReg(value : ShaderRegisterElement) : void
-		{
-			_viewDirVaryingReg = _baseSpecularMethod.viewDirVaryingReg = value;
+			super.sharedRegisters = _baseSpecularMethod.sharedRegisters = value;
 		}
 
 		/**
@@ -201,18 +151,18 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		override arcane function getFragmentCodePerLight(vo : MethodVO, lightIndex : int, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
+		override arcane function getFragmentCodePerLight(vo : MethodVO, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
 		{
-			return _baseSpecularMethod.getFragmentCodePerLight(vo, lightIndex, lightDirReg, lightColReg, regCache);
+			return _baseSpecularMethod.getFragmentCodePerLight(vo, lightDirReg, lightColReg, regCache);
 		}
 
 		/**
 		 * @inheritDoc
 		 * @return
 		 */
-		arcane override function getFragmentCodePerProbe(vo : MethodVO, lightIndex : int, cubeMapReg : ShaderRegisterElement, weightRegister : String, regCache : ShaderRegisterCache) : String
+		arcane override function getFragmentCodePerProbe(vo : MethodVO, cubeMapReg : ShaderRegisterElement, weightRegister : String, regCache : ShaderRegisterCache) : String
 		{
-			return _baseSpecularMethod.getFragmentCodePerProbe(vo, lightIndex, cubeMapReg, weightRegister, regCache);
+			return _baseSpecularMethod.getFragmentCodePerProbe(vo, cubeMapReg, weightRegister, regCache);
 		}
 
 		/**
@@ -241,12 +191,6 @@ package away3d.materials.methods
 		{
 			super.shadowRegister = value;
 			_baseSpecularMethod.shadowRegister = value;
-		}
-
-		override arcane function set tangentVaryingReg(value : ShaderRegisterElement) : void
-		{
-			super.tangentVaryingReg = value;
-			_baseSpecularMethod.tangentVaryingReg = value;
 		}
 
 		private function onShaderInvalidated(event : ShadingMethodEvent) : void

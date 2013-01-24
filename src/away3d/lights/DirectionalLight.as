@@ -52,6 +52,7 @@
 		 */
 		public function get sceneDirection() : Vector3D
 		{
+			if (_sceneTransformDirty) updateSceneTransform();
 			return _sceneDirection;
 		}
 
@@ -90,6 +91,7 @@
 		override protected function updateBounds() : void
 		{
 		}
+
 
 		/**
 		 * @inheritDoc

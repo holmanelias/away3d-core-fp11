@@ -1,14 +1,17 @@
 package away3d.animators
 {
-	import away3d.animators.*;
-	import away3d.core.managers.*;
-	import away3d.materials.passes.*;
+	import away3d.arcane;
+	import away3d.core.managers.Stage3DProxy;
+	import away3d.materials.passes.MaterialPassBase;
+
+	import flash.display3D.Context3D;
+
+	use namespace arcane;
 
 	/**
-	 * The animation data set used by skeleton-based animators, containing skeleton animation state data.
+	 * The animation data set used by skeleton-based animators, containing skeleton animation data.
 	 * 
 	 * @see away3d.animators.SkeletonAnimator
-	 * @see away3d.animators.SkeletonAnimationState
 	 */
 	public class SkeletonAnimationSet extends AnimationSetBase implements IAnimationSet
 	{
@@ -36,7 +39,7 @@ package away3d.animators
 		/**
 		 * @inheritDoc
 		 */
-		public function getAGALVertexCode(pass : MaterialPassBase, sourceRegisters : Array, targetRegisters : Array) : String
+		public function getAGALVertexCode(pass : MaterialPassBase, sourceRegisters : Vector.<String>, targetRegisters : Vector.<String>) : String
 		{
 			var len : uint = sourceRegisters.length;
 
@@ -88,19 +91,33 @@ package away3d.animators
 		public function deactivate(stage3DProxy : Stage3DProxy, pass : MaterialPassBase) : void
 		{
 			var streamOffset : uint = pass.numUsedStreams;
-
-			stage3DProxy.setSimpleVertexBuffer(streamOffset, null, null, 0);
-			stage3DProxy.setSimpleVertexBuffer(streamOffset + 1, null, null, 0);
+			var context : Context3D = stage3DProxy._context3D;
+			context.setVertexBufferAt(streamOffset, null);
+			context.setVertexBufferAt(streamOffset+1, null);
 		}
 		
 		/**
 		 * @inheritDoc
 		 */
-		public override function addState(stateName:String, animationState:IAnimationState):void
+		public function getAGALFragmentCode(pass : MaterialPassBase, shadedTarget : String) : String
 		{
-			super.addState(stateName, animationState);
+			return "";
+		}
+		
+		/**
+		 * @inheritDoc
+		 */
+		public function getAGALUVCode(pass : MaterialPassBase, UVSource : String, UVTarget:String) : String
+		{
+			return "mov " + UVTarget + "," + UVSource + "\n";
+		}
+		
+		/**
+		 * @inheritDoc
+		 */
+		public function doneAGALCode(pass : MaterialPassBase):void
+		{
 			
-			animationState.addOwner(this, stateName);
 		}
 	}
 }

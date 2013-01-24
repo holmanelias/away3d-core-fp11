@@ -2,8 +2,8 @@ package away3d.materials.methods
 {
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 	import away3d.textures.Texture2DBase;
 
 	use namespace arcane;
@@ -52,6 +52,8 @@ package away3d.materials.methods
 
 		public function set texture(value : Texture2DBase) : void
 		{
+			if (value.hasMipMaps != _texture.hasMipMaps || value.format != _texture.format)
+				invalidateShaderProgram();
 			_texture = value;
 		}
 
@@ -68,7 +70,7 @@ package away3d.materials.methods
 			var temp : ShaderRegisterElement = regCache.getFreeFragmentVectorTemp();
 			vo.texturesIndex = lightMapReg.index;
 
-			code = getTexSampleCode(vo, temp, lightMapReg, _useSecondaryUV? _secondaryUVFragmentReg : _uvFragmentReg);
+			code = getTex2DSampleCode(vo, temp, lightMapReg, _texture, _useSecondaryUV? _sharedRegisters.secondaryUVVarying : _sharedRegisters.uvVarying);
 
 			switch (_blendMode) {
 				case MULTIPLY:

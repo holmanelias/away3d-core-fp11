@@ -1,48 +1,47 @@
 package away3d.loaders.parsers
 {
-	import away3d.materials.utils.DefaultMaterialManager;
 	import away3d.arcane;
 	import away3d.containers.ObjectContainer3D;
+	import away3d.core.base.CompactSubGeometry;
 	import away3d.core.base.Geometry;
-	import away3d.core.base.SubGeometry;
 	import away3d.core.base.data.UV;
 	import away3d.core.base.data.Vertex;
 	import away3d.entities.Mesh;
 	import away3d.loaders.misc.ResourceDependency;
 	import away3d.loaders.parsers.utils.ParserUtil;
-	import away3d.materials.TextureMaterial;
 	import away3d.materials.ColorMaterial;
-	import away3d.textures.BitmapTexture;
+	import away3d.materials.TextureMaterial;
+	import away3d.materials.utils.DefaultMaterialManager;
 	import away3d.textures.Texture2DBase;
 	
 	import flash.geom.Vector3D;
 	import flash.net.URLRequest;
 	import flash.utils.ByteArray;
+	import flash.utils.Dictionary;
 
 	use namespace arcane;
 	
 	/**
 	 * AC3DParser provides a parser for the AC3D data type.
 	 * 
-	 * unsupported tags at this state: "MATERIAL", "numsurf","kids","crease","texrep","refs lines of","url","data" and "numvert lines of":
+	 * unsupported tags: "numsurf","crease","texrep","refs lines of","url","data" and "numvert lines of":
 	 */
 	public class AC3DParser extends ParserBase
 	{
-		private const LIMIT:uint = 196605;
+		private const LIMIT:uint = 65535;
+		private const CR:String = String.fromCharCode(10);
 		
 		private var _textData:String;
 		private var _startedParsing : Boolean;
-		private var _container:ObjectContainer3D;
 		private var _activeContainer:ObjectContainer3D;
 		private var _meshList:Vector.<Mesh>;
-		private var _inited:Boolean;
 		private var _trunk:Array;
 		private var _containersList:Array = [];
+		private var _tmpcontainerpos:Vector3D = new Vector3D(0.0,0.0,0.0);
 		private var _tmpos:Vector3D = new Vector3D(0.0,0.0,0.0);
 		private var _kidsCount:int = 0;
 		private var _activeMesh:Mesh;
 		private var _vertices:Vector.<Vertex>;
-		private var _indices:Vector.<uint>;
 		private var _uvs:Array;
 		private var _parsesV:Boolean;
 		private var _isQuad:Boolean;
@@ -52,6 +51,8 @@ package away3d.loaders.parsers
 		private var _oldIndex:uint;
 		private var _stringLen:uint;
 		private var _materialList:Array;
+		
+		private var _groupCount:uint;
 		
 		/**
 		 * Creates a new AC3DParser object.
@@ -127,26 +128,20 @@ package away3d.loaders.parsers
 		protected override function proceedParsing() : Boolean
 		{
 			var line:String;
-			var creturn:String = String.fromCharCode(10);
-			
-			// TODO: Remove root container (if it makes sense for this format) and
-			// instead return each asset individually using finalizeAsset()
-			if (!_container)
-				_container = new ObjectContainer3D();
 			
 			if(!_startedParsing) {
+				_groupCount = 0;
+				_activeContainer = null;
+				
 				_textData = getTextData();
 				var re:RegExp = new RegExp(String.fromCharCode(13),"g");
 				_textData = _textData.replace(re, "");
 				_materialList = [];
 				_startedParsing = true;
-			}
-			
-			if(!_inited){
-				_inited = true;
+			 
 				_meshList = new Vector.<Mesh>();
 				_stringLen = _textData.length;
-				_charIndex = _textData.indexOf(creturn, 0);
+				_charIndex = _textData.indexOf(CR, 0);
 				_oldIndex = _charIndex;
 				//skip the version header line
 				//version ac3d --> AC3D[b] --> hex value for file format
@@ -161,15 +156,18 @@ package away3d.loaders.parsers
 			var tUrl:String = "";
 			var m:Mesh;
 			var cont:ObjectContainer3D;
+			var nextObject:uint;
+			var nextSurface:uint;
 			
 			while(_charIndex<_stringLen && hasTime()){
 				
-				_charIndex = _textData.indexOf(creturn, _oldIndex);
+				_charIndex = _textData.indexOf(CR, _oldIndex);
 				
 				if(_charIndex == -1)
 					_charIndex = _stringLen;
 				
 				line = _textData.substring(_oldIndex, _charIndex);
+				
 				if(line.indexOf("texture ") != -1) tUrl = line.substring(line.indexOf('"')+1, line.length-1);
 				_trunk = line.replace("  "," ").replace("  "," ").replace("  "," ").split(" ");
 				
@@ -193,10 +191,13 @@ package away3d.loaders.parsers
 					
 					case "kids"://howmany children in the upcomming object. Probably need it later on, to couple with container/group generation
 						_kidsCount = parseInt(_trunk[1]);
+						
+						if(_lastType == "group") _groupCount = _kidsCount;
+						 
 						break;
 					
 					case "OBJECT":
-					
+						 
 						if(_activeMesh != null){
 							buildMeshGeometry(_activeMesh);
 							_tmpos.x = _tmpos.y = _tmpos.z = 0;
@@ -205,7 +206,33 @@ package away3d.loaders.parsers
 						
 						if(_trunk[1] == "world"){
 							_lastType = "world";
-							_activeContainer = _container;
+							
+						} else if(_trunk[1] == "group"){
+							cont = new ObjectContainer3D();
+							if(_activeContainer) _activeContainer.addChild(cont);
+							cont.name = "c_"+_containersList.length;
+							_containersList.push(cont);
+							_activeContainer = cont;
+							 
+							 finalizeAsset(cont);
+							
+							_lastType = "group";
+							
+						} else {
+							//validate if it's a definition that we can use
+							nextObject = _textData.indexOf("OBJECT", _oldIndex);
+							nextSurface = _textData.indexOf("numsurf", _oldIndex);
+
+							if(nextSurface == -1 || nextSurface> _stringLen){
+								//we're done here, we do not need the following stuff anyway
+								_charIndex = _oldIndex = _stringLen;
+								break;
+								
+							} else if(nextObject < nextSurface){
+								//some floating vertex/line lets skip this part
+								_charIndex = _oldIndex = nextObject-1;
+								break;
+							}
 						}
 						
 						if(_trunk[1] == "poly"){
@@ -213,22 +240,12 @@ package away3d.loaders.parsers
 							_activeMesh = new Mesh(geometry, null );
 							if(_vertices) cleanUpBuffers();
 							_vertices = new Vector.<Vertex>();
-							_indices = new Vector.<uint>();
 							_uvs = [];
 							_activeMesh.name = "m_"+_meshList.length;
 							_meshList[_meshList.length] = _activeMesh;
 							//in case of groups, numvert might not be there
 							_parsesV = true;
 							_lastType = "poly";
-						}
-						
-						if(_trunk[1] == "group"){
-							cont = new ObjectContainer3D();
-							_activeContainer.addChild(cont);
-							cont.name = "c_"+_containersList.length;
-							_containersList.push(cont);
-							_activeContainer = cont;
-							_lastType = "group";
 						}
 						break;
 					
@@ -242,7 +259,7 @@ package away3d.loaders.parsers
 						break;
 					
 					case "numvert":
-						_parsesV = true;
+						if(parseInt(_trunk[1]) >= 3) _parsesV = true;
 						break;
 					
 					case "refs":
@@ -251,7 +268,6 @@ package away3d.loaders.parsers
 							_isQuad = true;
 							_quadCount = 0;
 						} else if( refscount<3 || refscount > 4){
-							trace("AC3D Parser: Unsupported polygon type with "+refscount+" sides found. Triangulate in AC3D!");
 							continue;
 						} else{
 							_isQuad = false;
@@ -265,7 +281,8 @@ package away3d.loaders.parsers
 						break;
 					
 					case "texture":
-						_activeMesh.material = DefaultMaterialManager.getDefaultMaterial();
+						_activeMesh.material = new TextureMaterial( DefaultMaterialManager.getDefaultTexture() );
+						_activeMesh.material.name = "m_"+_activeMesh.name;
 						addDependency(String(_meshList.length-1), new URLRequest(tUrl));
 						break;
 					
@@ -275,9 +292,17 @@ package away3d.loaders.parsers
 						relative to the parent - i.e. not a global position.  If this is not found then
 						the default centre of the object will be 0, 0, 0.
 						*/
-						_tmpos.x = parseFloat(_trunk[1]);
-						_tmpos.y = parseFloat(_trunk[2]);
-						_tmpos.z = parseFloat(_trunk[3]);
+						 
+						if(_lastType == "group"){
+							_tmpcontainerpos.x = parseFloat(_trunk[1]);
+							_tmpcontainerpos.y = parseFloat(_trunk[2]);
+							_tmpcontainerpos.z = parseFloat(_trunk[3]);
+
+						} else {
+							_tmpos.x = parseFloat(_trunk[1]);
+							_tmpos.y = parseFloat(_trunk[2]);
+							_tmpos.z = parseFloat(_trunk[3]);
+						}
 					
 					case "rot"://%f %f %f  %f %f %f  %f %f %f
 						/*The 3x3 rotation matrix for this objects vertices.  Note that the rotation is relative
@@ -307,20 +332,15 @@ package away3d.loaders.parsers
 							if(_isQuad){
 								_quadCount++;
 								if(_quadCount == 4){
-									_indices.push(_indices[_indices.length-1]);
 									_uvs.push(_uvs[_uvs.length-2], _uvs[_uvs.length-1]);
-									_indices.push(parseInt(_trunk[0]));
 									_uvs.push(parseInt(_trunk[0]), new UV(parseFloat(_trunk[1]), 1-parseFloat(_trunk[2])));
-									_indices.push(_indices[_indices.length-5]);
 									_uvs.push(_uvs[_uvs.length-10], _uvs[_uvs.length-9]);
 									
 								} else {
-									_indices.push(parseInt(_trunk[0]));
 									_uvs.push(parseInt(_trunk[0]), new UV(parseFloat(_trunk[1]), 1-parseFloat(_trunk[2])));
 								}
 								
 							} else {
-								_indices.push(parseInt(_trunk[0]));
 								_uvs.push(parseInt(_trunk[0]), new UV(parseFloat(_trunk[1]), 1-parseFloat(_trunk[2])));
 							}
 						}
@@ -330,17 +350,27 @@ package away3d.loaders.parsers
 			
 			if(_charIndex >= _stringLen){
 				
-				if(_activeMesh != null)
-					buildMeshGeometry(_activeMesh);
+				if(_activeMesh != null) buildMeshGeometry(_activeMesh);
 				
-				finalizeAsset(_container);
-				
+				//finalizeAsset(_container);
 				cleanUP();
 				
 				return PARSING_DONE;
 			} 
 			
 			return MORE_TO_PARSE;
+		}
+		
+		private function checkGroup(mesh:Mesh):void
+		{
+			if(_groupCount >0) _groupCount --;
+			
+			if(_activeContainer) _activeContainer.addChild(_activeMesh);
+			
+			if(_activeContainer && _groupCount == 0){
+				_activeContainer = null;
+				_tmpcontainerpos.x = _tmpcontainerpos.y = _tmpcontainerpos.z = 0;
+			}
 		}
 		
 		private function buildMeshGeometry(mesh:Mesh):void
@@ -355,23 +385,22 @@ package away3d.loaders.parsers
 			
 			var vertices:Vector.<Number> = new Vector.<Number>();
 			var indices:Vector.<uint> = new Vector.<uint>();
-			var vuv:Vector.<Number> = new Vector.<Number>();
-			var index:uint = 0;
-			var vertLength:uint ;
+			var uvs:Vector.<Number> = new Vector.<Number>();
 			
-			var subGeomsData:Array = [vertices,indices,vuv];
-			
+			var subGeomsData:Array = [vertices,indices,uvs];
 			var j:uint;
+			var dic:Dictionary = new Dictionary();
+			var ref:String;
 			
 			for (var i:uint = 0;i<_uvs.length;i+=6){
-				
-				if(vertLength+9 > LIMIT ){
-					index = 0;
-					vertLength = 0;
+				 
+				if(indices.length+3 > LIMIT ){
 					vertices = new Vector.<Number>();
 					indices = new Vector.<uint>();
-					vuv = new Vector.<Number>();
-					subGeomsData.push(vertices,indices,vuv);
+					uvs = new Vector.<Number>();
+					subGeomsData.push(vertices,indices,uvs);
+					dic = null;
+					dic = new Dictionary();
 				}
 				
 				uv0 = _uvs[i+1];
@@ -382,35 +411,61 @@ package away3d.loaders.parsers
 				v1 = _vertices[_uvs[i+2]];
 				v2 = _vertices[_uvs[i+4]];
 				
-				vertices.push(v1.x, v1.y, v1.z, v0.x, v0.y, v0.z, v2.x, v2.y, v2.z);
-				
-				for(j=0; j<3;++j){
-					indices[index] = index;
-					index++;
+				//face order other than away
+				ref = v1.toString() + uv1.toString();
+				if(dic[ref]){
+					indices.push(dic[ref]);
+				} else {
+					dic[ref] = vertices.length/3;
+					indices.push(dic[ref]);
+					vertices.push(v1.x, v1.y, v1.z);
+					uvs.push(uv1.u, uv1.v);
 				}
 				
-				vuv.push(uv1.u, uv1.v, uv0.u, uv0.v, uv2.u, uv2.v);
-				vertLength+=9;
+				ref = v0.toString() + uv0.toString();
+				if(dic[ref]){ 
+					indices.push(dic[ref]);
+				} else {
+					dic[ref] = vertices.length/3;
+					indices.push(dic[ref]);
+					vertices.push(v0.x, v0.y, v0.z);
+					uvs.push(uv0.u, uv0.v);
+				}
+				
+				ref = v2.toString() + uv2.toString();
+				if(dic[ref]){
+					indices.push(dic[ref]);
+				} else {
+					dic[ref] = vertices.length/3;
+					indices.push(dic[ref]);
+					vertices.push(v2.x, v2.y, v2.z);
+					uvs.push(uv2.u, uv2.v);
+				}
 			}
 			
-			var sub_geom:SubGeometry;
+			var sub_geom:CompactSubGeometry;
 			var geom:Geometry = mesh.geometry;
 			
 			for(i=0;i<subGeomsData.length;i+=3){
-				sub_geom = new SubGeometry();
-				geom.addSubGeometry(sub_geom);
-				sub_geom.updateVertexData(subGeomsData[i]);
+				sub_geom = new CompactSubGeometry();
+				sub_geom.fromVectors(subGeomsData[i], subGeomsData[i+2], null, null);
 				sub_geom.updateIndexData(subGeomsData[i+1]);
-				sub_geom.updateUVData(subGeomsData[i+2]);
+				geom.addSubGeometry(sub_geom);
 			}
-			
-			_activeContainer.addChild(mesh);
-			
+			 
 			mesh.x = -_tmpos.x;
 			mesh.y = _tmpos.y;
 			mesh.z = _tmpos.z;
 			
+			mesh.x -= _tmpcontainerpos.x;
+			mesh.y += _tmpcontainerpos.y;
+			mesh.z += _tmpcontainerpos.z;
+			
+			checkGroup(_activeMesh);
+			 
 			finalizeAsset(mesh);
+			
+			dic = null;
 		}
 		
 		private function retrieveMeshFromID(id:String):Mesh

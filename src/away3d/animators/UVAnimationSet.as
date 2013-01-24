@@ -15,7 +15,7 @@ package away3d.animators
 		/**
 		 * @inheritDoc
 		 */
-		public function getAGALVertexCode(pass:MaterialPassBase, sourceRegisters:Array, targetRegisters:Array):String
+		public function getAGALVertexCode(pass:MaterialPassBase, sourceRegisters:Vector.<String>, targetRegisters:Vector.<String>):String
 		{
 			// TODO: Auto-generated method stub
 			return null;
@@ -38,11 +38,25 @@ package away3d.animators
 		/**
 		 * @inheritDoc
 		 */
-		public override function addState(stateName:String, animationState:IAnimationState):void
+		public function getAGALFragmentCode(pass : MaterialPassBase, shadedTarget : String) : String
 		{
-			super.addState(stateName, animationState);
+			return "";
+		}
+		
+		/**
+		 * @inheritDoc
+		 */
+		public function getAGALUVCode(pass : MaterialPassBase, UVSource : String, UVTarget:String) : String
+		{
+			return "mov " + UVTarget + "," + UVSource + "\n";
+		}
+		
+		/**
+		 * @inheritDoc
+		 */
+		public function doneAGALCode(pass : MaterialPassBase):void
+		{
 			
-			animationState.addOwner(this, stateName);
 		}
 	}
 }

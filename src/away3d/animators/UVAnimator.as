@@ -1,15 +1,13 @@
 package away3d.animators
 {
-	import away3d.animators.transitions.StateTransitionBase;
-	import away3d.arcane;
+	import away3d.animators.states.*;
+	import away3d.animators.transitions.*;
 	import away3d.animators.data.*;
-	import away3d.animators.nodes.*;
+	import away3d.cameras.Camera3D;
 	import away3d.core.base.*;
 	import away3d.core.managers.*;
 	import away3d.materials.*;
 	import away3d.materials.passes.*;
-
-	use namespace arcane;
 	
 	/**
 	 * Provides an interface for assigning uv-based animation data sets to mesh-based entity objects
@@ -18,15 +16,14 @@ package away3d.animators
 	 */
 	public class UVAnimator extends AnimatorBase implements IAnimator
 	{
-		private var _activeNode:IUVAnimationNode;
-		
 		private var _uvAnimationSet:UVAnimationSet;
 		private var _deltaFrame : UVAnimationFrame = new UVAnimationFrame();
+		private var _activeUVState:IUVAnimationState;
 		
 		/**
 		 * Creates a new <code>UVAnimator</code> object.
-		 * 
-		 * @param uvAnimationSet The animation data set containing the uv animation states used by the animator.
+		 *
+		 * @param uvAnimationSet The animation data set containing the uv animations used by the animator.
 		 */
 		public function UVAnimator(uvAnimationSet:UVAnimationSet)
 		{
@@ -38,7 +35,7 @@ package away3d.animators
 		/**
 		 * @inheritDoc
 		 */
-		public function setRenderState(stage3DProxy : Stage3DProxy, renderable : IRenderable, vertexConstantOffset : int, vertexStreamOffset : int) : void
+		public function setRenderState(stage3DProxy : Stage3DProxy, renderable : IRenderable, vertexConstantOffset : int, vertexStreamOffset : int, camera:Camera3D) : void
 		{
 			var material:TextureMaterial = renderable.material as TextureMaterial;
 			var subMesh:SubMesh = renderable as SubMesh;
@@ -59,16 +56,21 @@ package away3d.animators
 		/**
 		 * @inheritDoc
 		 */
-		public function play(stateName : String, stateTransition:StateTransitionBase = null) : void
+		public function play(name : String, transition : IAnimationTransition = null, offset : Number = NaN) : void
 		{
-			_activeState = _uvAnimationSet.getState(stateName) as UVAnimationState;
+			if (_name == name)
+				return;
 			
-			if (!_activeState)
-				throw new Error("Animation state " + stateName + " not found!");
+			_name = name;
 			
-			_activeNode = _activeState.rootNode as IUVAnimationNode;
+			if (!_animationSet.hasAnimation(name))
+				throw new Error("Animation root node " + name + " not found!");
 			
-			_absoluteTime = 0;
+			_activeNode = _animationSet.getAnimation(name);
+			
+			_activeState = getAnimationState(_activeNode);
+			
+			_activeUVState = _activeState as IUVAnimationState;
 			
 			start();
 		}
@@ -80,11 +82,11 @@ package away3d.animators
 		{
 			_absoluteTime += dt;
 			
-			_activeNode.update(_absoluteTime);
+			_activeUVState.update(_absoluteTime);
 			
-			var currentUVFrame : UVAnimationFrame = _activeNode.currentUVFrame;
-			var nextUVFrame : UVAnimationFrame = _activeNode.currentUVFrame;
-			var blendWeight : Number = _activeNode.blendWeight;
+			var currentUVFrame : UVAnimationFrame = _activeUVState.currentUVFrame;
+			var nextUVFrame : UVAnimationFrame = _activeUVState.currentUVFrame;
+			var blendWeight : Number = _activeUVState.blendWeight;
 			
 			_deltaFrame.offsetU = currentUVFrame.offsetU + blendWeight * (nextUVFrame.offsetU - currentUVFrame.offsetU);
 			_deltaFrame.offsetV = currentUVFrame.offsetV + blendWeight * (nextUVFrame.offsetV - currentUVFrame.offsetV);

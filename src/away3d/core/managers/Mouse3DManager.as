@@ -1,5 +1,8 @@
 package away3d.core.managers
 {
+	import flash.events.MouseEvent;
+	import flash.geom.Vector3D;
+	
 	import away3d.arcane;
 	import away3d.containers.ObjectContainer3D;
 	import away3d.containers.View3D;
@@ -7,10 +10,6 @@ package away3d.core.managers
 	import away3d.core.pick.PickingCollisionVO;
 	import away3d.core.pick.PickingType;
 	import away3d.events.MouseEvent3D;
-
-	import flash.events.MouseEvent;
-
-	import flash.geom.Vector3D;
 
 	use namespace arcane;
 
@@ -62,7 +61,7 @@ package away3d.core.managers
 			_updateDirty = false;
 		}
 
-		public function fireMouseEvents() : void
+		public function fireMouseEvents(view: View3D) : void
 		{
 			var i : uint;
 			var len : uint;
@@ -82,11 +81,21 @@ package away3d.core.managers
 
 			// Dispatch all queued events.
 			len = _queuedEvents.length;
+			var prevX:int = -1;
+			var prevY:int = -1;
 			for (i = 0; i < len; ++i) {
 				// Only dispatch from first implicitly enabled object ( one that is not a child of a mouseChildren = false hierarchy ).
 				event = _queuedEvents[i];
+				if(event.screenX != prevX || event.screenY != prevY) {
+					updateCollider(view);
+					prevX = event.screenX;
+					prevY = event.screenY;
+				}
+				if(_collidingObject != null) {
+					updateFromCollider(event);
+				}
+				else event.object = null;
 				dispatcher = event.object;
-
 				while (dispatcher && !dispatcher._ancestorsAllowMouseEnabled)
 					dispatcher = dispatcher.parent;
 
@@ -94,6 +103,16 @@ package away3d.core.managers
 					dispatcher.dispatchEvent(event);
 			}
 			_queuedEvents.length = 0;
+		}
+		
+		private function updateFromCollider(event: MouseEvent3D) : void {
+			event.object = _collidingObject.entity;
+			// UV.
+			event.uv = _collidingObject.uv;	
+			// Position.
+			event.localPosition = _collidingObject.localPosition;	
+			// Normal.
+			event.localNormal = _collidingObject.localNormal;
 		}
 
 		// ---------------------------------------------------------------------
@@ -162,7 +181,7 @@ package away3d.core.managers
 
 		private function onClick(event : MouseEvent) : void
 		{
-			if (_collidingObject) queueDispatch(_mouseClick, event);
+			queueDispatch(_mouseClick, event);
 			_updateDirty = true;
 		}
 
@@ -174,13 +193,13 @@ package away3d.core.managers
 
 		private function onMouseDown(event : MouseEvent) : void
 		{
-			if (_collidingObject) queueDispatch(_mouseDown, event);
+			 queueDispatch(_mouseDown, event);
 			_updateDirty = true;
 		}
 
 		private function onMouseUp(event : MouseEvent) : void
 		{
-			if (_collidingObject) queueDispatch(_mouseUp, event);
+			queueDispatch(_mouseUp, event);
 			_updateDirty = true;
 		}
 

@@ -111,6 +111,7 @@ package away3d.loaders.parsers
 		{
 			var bmp:BitmapData = TextureUtils.adjustToValidSize(Bitmap(_loader.content).bitmapData);
 			var asset : BitmapTexture = new BitmapTexture(bmp);
+			//var asset : BitmapTexture = new BitmapTexture(Bitmap(_loader.content).bitmapData);
 			_loader.contentLoaderInfo.removeEventListener(Event.COMPLETE, onLoadComplete);
 			_doneParsing = true;
 			finalizeAsset(asset, _fileName);

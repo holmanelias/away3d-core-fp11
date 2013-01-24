@@ -105,29 +105,13 @@ package away3d.core.managers
 		}
 
 		/**
-		 * Assign the vertex buffer in the Context3D ready for use in the shader.
-		 * @param index The index for the vertex buffer setting
-		 * @param buffer The Vertex Buffer 
-		 * @param format The format of the buffer. See Context3DVertexBufferFormat
-		 * @param offset An offset from the start of the data
-		 */
-		public function setSimpleVertexBuffer(index : int, buffer : VertexBuffer3D, format : String, offset : int = 0) : void
-		{
-			// force setting null
-			if (buffer && _activeVertexBuffers[index] == buffer) return;
-
-			_context3D.setVertexBufferAt(index, buffer, offset, format);
-			_activeVertexBuffers[index] = buffer;
-		}
-
-		/**
 		 * Assign the texture in the Context3D ready for use in the shader.
 		 * @param index The index where the texture is set
 		 * @param texture The texture to set
 		 */
 		public function setTextureAt(index : int, texture : TextureBase) : void
 		{
-			if (texture != null && _activeTextures[index] == texture) return;
+			if (_activeTextures[index] == texture) return;
 
 			_context3D.setTextureAt(index,  texture);
 
@@ -185,8 +169,8 @@ package away3d.core.managers
 		}
 
 		public function set enableDepthAndStencil(enableDepthAndStencil : Boolean) : void
-		{ 
-			_enableDepthAndStencil = enableDepthAndStencil; 
+		{
+			_enableDepthAndStencil = enableDepthAndStencil;
 			_backBufferDirty = true;
 		}
 		
@@ -460,10 +444,9 @@ package away3d.core.managers
 		{
 			if (_stage3D.context3D) {
 				var hadContext : Boolean = (_context3D != null);
-
 				_context3D = _stage3D.context3D;
 				_context3D.enableErrorChecking = Debug.active;
-				
+
 				_usesSoftwareRendering = (_context3D.driverInfo.indexOf('Software')==0);
 				
 				// Only configure back buffer if width and height have been set,
@@ -491,7 +474,7 @@ package away3d.core.managers
 			// If not, we can't be sure and should stick to the
 			// old value (will likely be same if re-requesting.)
 			_usesSoftwareRendering ||= forceSoftware;
-			
+
 			_stage3D.requestContext3D(forceSoftware? Context3DRenderMode.SOFTWARE : Context3DRenderMode.AUTO);
 			_contextRequested = true;
 		}

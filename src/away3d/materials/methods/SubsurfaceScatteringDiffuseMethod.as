@@ -4,14 +4,12 @@ package away3d.materials.methods
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
 	import away3d.core.managers.Stage3DProxy;
-	import away3d.materials.methods.MethodVO;
+	import away3d.materials.compilation.ShaderRegisterData;
 	import away3d.materials.passes.MaterialPassBase;
 	import away3d.materials.passes.SingleObjectDepthPass;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 
-	import flash.display3D.Context3D;
-	import flash.display3D.Context3DProgramType;
 	import flash.display3D.textures.Texture;
 	import flash.geom.Matrix3D;
 
@@ -29,8 +27,6 @@ package away3d.materials.methods
 		private var _propReg : ShaderRegisterElement;
 		private var _scattering : Number;
 		private var _translucency : Number = 1;
-		private var _lightIndex : int;
-		private var _totalScatterColorReg : ShaderRegisterElement;
 		private var _lightColorReg : ShaderRegisterElement;
 		private var _scatterColor : uint = 0xffffff;
 		private var _colorReg : ShaderRegisterElement;
@@ -38,6 +34,7 @@ package away3d.materials.methods
 		private var _scatterR : Number = 1.0;
 		private var _scatterG : Number = 1.0;
 		private var _scatterB : Number = 1.0;
+		private var _targetReg : ShaderRegisterElement;
 
 		/**
 		 * Creates a new SubsurfaceScatteringDiffuseMethod object.
@@ -81,10 +78,10 @@ package away3d.materials.methods
 
 			_lightProjVarying = null;
 			_propReg = null;
-			_totalScatterColorReg = null;
 			_lightColorReg = null;
 			_colorReg = null;
 			_decReg = null;
+			_targetReg = null;
 		}
 
 		/**
@@ -133,16 +130,6 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function reset() : void
-		{
-			_lightIndex = 0;
-			super.reset();
-		}
-
-
-		/**
-		 * @inheritDoc
-		 */
 		arcane override function getVertexCode(vo : MethodVO, regCache : ShaderRegisterCache) : String
 		{
 			var code : String = super.getVertexCode(vo, regCache);
@@ -175,24 +162,22 @@ package away3d.materials.methods
 		 */
 		arcane override function getFragmentPreLightingCode(vo : MethodVO, regCache : ShaderRegisterCache) : String
 		{
-			_totalScatterColorReg = regCache.getFreeFragmentVectorTemp();
 			_colorReg = regCache.getFreeFragmentConstant();
             _decReg = regCache.getFreeFragmentConstant();
 			_propReg = regCache.getFreeFragmentConstant();
 			vo.secondaryFragmentConstantsIndex = _colorReg.index*4;
 
-			regCache.addFragmentTempUsages(_totalScatterColorReg, 1);
 			return super.getFragmentPreLightingCode(vo, regCache);
 		}
 
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function getFragmentCodePerLight(vo : MethodVO, lightIndex : int, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
+		arcane override function getFragmentCodePerLight(vo : MethodVO, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
 		{
+			_isFirstLight = true;
 			_lightColorReg = lightColReg;
-			_lightIndex = lightIndex;
-			return super.getFragmentCodePerLight(vo, lightIndex, lightDirReg, lightColReg, regCache);
+			return super.getFragmentCodePerLight(vo, lightDirReg, lightColReg, regCache);
 		}
 
 		/**
@@ -201,8 +186,15 @@ package away3d.materials.methods
 		arcane override function getFragmentPostLightingCode(vo : MethodVO, regCache : ShaderRegisterCache, targetReg : ShaderRegisterElement) : String
 		{
 			var code : String = super.getFragmentPostLightingCode(vo, regCache, targetReg);
-			code += "add " + targetReg+".xyz, " + targetReg+".xyz, " + _totalScatterColorReg+".xyz\n";
-			regCache.removeFragmentTempUsage(_totalScatterColorReg);
+			var temp : ShaderRegisterElement = regCache.getFreeFragmentVectorTemp();
+
+			code += "mul " + temp+".xyz, " + _lightColorReg+".xyz, " + _targetReg+".w\n" +
+					"mul " + temp+".xyz, " + temp+".xyz, " + _colorReg+".xyz\n" +
+					"add " + targetReg+".xyz, " + targetReg+".xyz, " + temp+".xyz\n";
+
+			if(_targetReg != _sharedRegisters.viewDirFragment)
+				regCache.removeFragmentTempUsage(targetReg);
+
 			return code;
 		}
 
@@ -224,51 +216,57 @@ package away3d.materials.methods
 
 		arcane override function setRenderState(vo : MethodVO, renderable : IRenderable, stage3DProxy : Stage3DProxy, camera : Camera3D) : void
 		{
-			var depthMaps : Vector.<Texture> = _depthPass.getDepthMaps(renderable, stage3DProxy);
-			var projections : Vector.<Matrix3D> = _depthPass.getProjections(renderable);
+			var depthMap : Texture = _depthPass.getDepthMap(renderable, stage3DProxy);
+			var projection : Matrix3D = _depthPass.getProjection(renderable);
 
-			stage3DProxy.setTextureAt(vo.secondaryTexturesIndex, depthMaps[0]);
-			projections[0].copyRawDataTo(vo.vertexData, vo.secondaryVertexConstantsIndex+4, true);
+			stage3DProxy.setTextureAt(vo.secondaryTexturesIndex, depthMap);
+			projection.copyRawDataTo(vo.vertexData, vo.secondaryVertexConstantsIndex+4, true);
 		}
 
 		/**
 		 * Generates the code for this method
 		 */
-		private function scatterLight(vo : MethodVO, targetReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
+		private function scatterLight(vo : MethodVO, targetReg : ShaderRegisterElement, regCache : ShaderRegisterCache, sharedRegisters : ShaderRegisterData) : String
 		{
+			// only scatter first light
+			if (!_isFirstLight) return "";
+			_isFirstLight = false;
+
 			var code : String = "";
 			var depthReg : ShaderRegisterElement = regCache.getFreeTextureReg();
-			var projReg : ShaderRegisterElement = _lightProjVarying;
 
-			// only scatter first light
-			if (_lightIndex > 0) return "";
+
+			if (sharedRegisters.viewDirFragment) {
+				_targetReg = sharedRegisters.viewDirFragment;
+			}
+			else {
+				_targetReg = regCache.getFreeFragmentVectorTemp();
+				regCache.addFragmentTempUsages(_targetReg, 1);
+			}
 
 			vo.secondaryTexturesIndex = depthReg.index;
 
-//			temp = regCache.getFreeFragmentVectorTemp();
-			code += "tex " + _totalScatterColorReg + ", " + projReg + ", " + depthReg +  " <2d,nearest,clamp>\n" +
+			var temp : ShaderRegisterElement = regCache.getFreeFragmentVectorTemp();
+			code += "tex " + temp + ", " + _lightProjVarying + ", " + depthReg +  " <2d,nearest,clamp>\n" +
 			// reencode RGBA
-					"dp4 " + _totalScatterColorReg+".z, " + _totalScatterColorReg + ", " + _decReg + "\n" +
+					"dp4 " + targetReg+".z, " + temp + ", " + _decReg + "\n";
 			// currentDistanceToLight - closestDistanceToLight
-					"sub " + _totalScatterColorReg+".w, " + projReg+".z, " + _totalScatterColorReg+".z\n" +
+			code +=	"sub " + targetReg+".z, " + _lightProjVarying+".z, " + targetReg+".z\n" +
 
-					"sub " + _totalScatterColorReg+".w, " + _propReg+".x, " + _totalScatterColorReg+".w\n" +
-					"mul " + _totalScatterColorReg+".w, " + _propReg+".y, " + _totalScatterColorReg+".w\n" +
-					"sat " + _totalScatterColorReg+".w, " + _totalScatterColorReg+".w\n" +
+					"sub " + targetReg+".z, " + _propReg+".x, " + targetReg+".z\n" +
+					"mul " + targetReg+".z, " + _propReg+".y, " + targetReg+".z\n" +
+					"sat " + targetReg+".z, " + targetReg+".z\n" +
 
 			// targetReg.x contains dot(lightDir, normal)
 			// modulate according to incident light angle (scatter = scatter*(-.5*dot(light, normal) + .5)
 					"neg " + targetReg+".y, " + targetReg+".x\n" +
 					"mul " + targetReg+".y, " + targetReg+".y, " + _propReg+".z\n" +
 					"add " + targetReg+".y, " + targetReg+".y, " + _propReg+".z\n" +
-					"mul " + _totalScatterColorReg+".w, " + _totalScatterColorReg+".w, " + targetReg+".y\n" +
+					"mul " + _targetReg+".w, " + targetReg+".z, " + targetReg+".y\n" +
 
 			// blend diffuse: d' = (1-s)*d + s*1
-					"sub " + _totalScatterColorReg+".y, " + _colorReg+".w, " + _totalScatterColorReg+".w\n" +
-					"mul " + targetReg+".w, " + targetReg+".w, " + _totalScatterColorReg+".y\n" +
-
-					"mul " + _totalScatterColorReg+".xyz, " + _lightColorReg+".xyz, " + _totalScatterColorReg+".w\n" +
-					"mul " + _totalScatterColorReg+".xyz, " + _totalScatterColorReg+".xyz, " + _colorReg+".xyz\n";
+					"sub " + targetReg+".y, " + _colorReg+".w, " + _targetReg+".w\n" +
+					"mul " + targetReg+".w, " + targetReg+".w, " + targetReg+".y\n";
 
 			return code;
 		}

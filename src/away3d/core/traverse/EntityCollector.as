@@ -37,8 +37,6 @@ package away3d.core.traverse
 		private var _pointLights : Vector.<PointLight>;
 		private var _lightProbes : Vector.<LightProbe>;
 		protected var _numEntities : uint;
-		protected var _numOpaques : uint;
-		protected var _numBlended : uint;
 		protected var _numLights : uint;
 		protected var _numTriangles : uint;
 		protected var _numMouseEnableds : uint;
@@ -57,24 +55,12 @@ package away3d.core.traverse
 
 		private function init() : void
 		{
-//			_opaqueRenderables = new Vector.<IRenderable>();
-//			_blendedRenderables = new Vector.<IRenderable>();
 			_lights = new Vector.<LightBase>();
 			_directionalLights = new Vector.<DirectionalLight>();
 			_pointLights = new Vector.<PointLight>();
 			_lightProbes = new Vector.<LightProbe>();
 			_renderableListItemPool = new RenderableListItemPool();
 			_entityListItemPool = new EntityListItemPool();
-		}
-
-		public function get numOpaques() : uint
-		{
-			return _numOpaques;
-		}
-
-		public function get numBlended() : uint
-		{
-			return _numBlended;
 		}
 
 		/**
@@ -144,7 +130,6 @@ package away3d.core.traverse
 		 */
 		public function get lights() : Vector.<LightBase>
 		{
-			// todo: provide separate containers per default light type, otherwise store here
 			return _lights;
 		}
 
@@ -188,7 +173,9 @@ package away3d.core.traverse
 		 */
 		override public function enterNode(node : NodeBase) : Boolean
 		{
-			return node.isInFrustum(_camera);
+			var enter : Boolean = _collectionMark != node._collectionMark && node.isInFrustum(_camera);
+			node._collectionMark = _collectionMark;
+			return enter;
 		}
 
 		/**
@@ -221,12 +208,10 @@ package away3d.core.traverse
 				if (material.requiresBlending) {
 					item.next = _blendedRenderableHead;
 					_blendedRenderableHead = item;
-					++_numBlended;
 				}
 				else {
 					item.next = _opaqueRenderableHead;
 					_opaqueRenderableHead = item;
-					++_numOpaques;
 				}
 			}
 		}

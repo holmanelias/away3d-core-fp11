@@ -1,14 +1,17 @@
-package away3d.materials.methods
-{
+package away3d.materials.methods {
 	import away3d.arcane;
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.events.ShadingMethodEvent;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterData;
+	import away3d.materials.compilation.ShaderRegisterElement;
 	import away3d.materials.passes.MaterialPassBase;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.textures.TextureProxyBase;
 
+	import flash.display3D.Context3DTextureFormat;
+	import flash.display3D.textures.TextureBase;
 	import flash.events.EventDispatcher;
 
 	use namespace arcane;
@@ -19,15 +22,7 @@ package away3d.materials.methods
 	 */
 	public class ShadingMethodBase extends EventDispatcher
 	{
-		protected var _viewDirVaryingReg : ShaderRegisterElement;
-		protected var _viewDirFragmentReg : ShaderRegisterElement;
-		protected var _normalFragmentReg : ShaderRegisterElement;
-		protected var _uvFragmentReg : ShaderRegisterElement;
-		protected var _secondaryUVFragmentReg : ShaderRegisterElement;
-		protected var _tangentVaryingReg : ShaderRegisterElement;
-		protected var _globalPosReg : ShaderRegisterElement;
-		protected var _projectionReg : ShaderRegisterElement;
-
+		protected var _sharedRegisters : ShaderRegisterData;
 		protected var _passes : Vector.<MaterialPassBase>;
 
 		/**
@@ -47,6 +42,16 @@ package away3d.materials.methods
 		arcane function initConstants(vo : MethodVO) : void
 		{
 
+		}
+
+		arcane function get sharedRegisters() : ShaderRegisterData
+		{
+			return _sharedRegisters;
+		}
+
+		arcane function set sharedRegisters(value : ShaderRegisterData) : void
+		{
+			_sharedRegisters = value;
 		}
 
 		/**
@@ -85,102 +90,6 @@ package away3d.materials.methods
 		 */
 		arcane function cleanCompilationData() : void
 		{
-			_viewDirVaryingReg = null;
-			_viewDirFragmentReg = null;
-			_normalFragmentReg = null;
-			_uvFragmentReg = null;
-			_globalPosReg = null;
-			_projectionReg = null;
-		}
-
-		/**
-		 * The fragment register in which the uv coordinates are stored.
-		 * @private
-		 */
-		arcane function get globalPosReg() : ShaderRegisterElement
-		{
-			return _globalPosReg;
-		}
-
-		arcane function set globalPosReg(value : ShaderRegisterElement) : void
-		{
-			_globalPosReg = value;
-		}
-
-		arcane function get projectionReg() : ShaderRegisterElement
-		{
-			return _projectionReg;
-		}
-
-		arcane function set projectionReg(value : ShaderRegisterElement) : void
-		{
-			_projectionReg = value;
-		}
-
-		/**
-		 * The fragment register in which the uv coordinates are stored.
-		 * @private
-		 */
-		arcane function get UVFragmentReg() : ShaderRegisterElement
-		{
-			return _uvFragmentReg;
-		}
-
-		arcane function set UVFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_uvFragmentReg = value;
-		}
-
-		/**
-		 * The fragment register in which the uv coordinates are stored.
-		 * @private
-		 */
-		arcane function get secondaryUVFragmentReg() : ShaderRegisterElement
-		{
-			return _secondaryUVFragmentReg;
-		}
-
-		arcane function set secondaryUVFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_secondaryUVFragmentReg = value;
-		}
-
-		/**
-		 * The fragment register in which the view direction is stored.
-		 * @private
-		 */
-		arcane function get viewDirFragmentReg() : ShaderRegisterElement
-		{
-			return _viewDirFragmentReg;
-		}
-
-		arcane function set viewDirFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_viewDirFragmentReg = value;
-		}
-
-		public function get viewDirVaryingReg() : ShaderRegisterElement
-		{
-			return _viewDirVaryingReg;
-		}
-
-		public function set viewDirVaryingReg(value : ShaderRegisterElement) : void
-		{
-			_viewDirVaryingReg = value;
-		}
-
-		/**
-		 * The fragment register in which the normal is stored.
-		 * @private
-		 */
-		arcane function get normalFragmentReg() : ShaderRegisterElement
-		{
-			return _normalFragmentReg;
-		}
-
-		arcane function set normalFragmentReg(value : ShaderRegisterElement) : void
-		{
-			_normalFragmentReg = value;
 		}
 
 		/**
@@ -227,16 +136,50 @@ package away3d.materials.methods
 		 * @param inputReg The texture stream register.
 		 * @return The fragment code that performs the sampling.
 		 */
-		protected function getTexSampleCode(vo : MethodVO, targetReg : ShaderRegisterElement, inputReg : ShaderRegisterElement, uvReg : ShaderRegisterElement = null, forceWrap : String = null) : String
+		protected function getTex2DSampleCode(vo : MethodVO, targetReg : ShaderRegisterElement, inputReg : ShaderRegisterElement, texture : TextureProxyBase, uvReg : ShaderRegisterElement = null, forceWrap : String = null) : String
 		{
 			var wrap : String = forceWrap || (vo.repeatTextures ? "wrap" : "clamp");
 			var filter : String;
+			var format : String = getFormatStringForTexture(texture);
+			var enableMipMaps : Boolean = vo.useMipmapping && texture.hasMipMaps;
 
-			if (vo.useSmoothTextures) filter = vo.useMipmapping? "linear,miplinear" : "linear";
-			else filter = vo.useMipmapping ? "nearest,mipnearest" : "nearest";
+			if (vo.useSmoothTextures) {
+				filter = enableMipMaps? "linear,miplinear" : "linear";
+			}else{
+				filter = enableMipMaps? "nearest,mipnearest" : "nearest";
+			}
 
-            uvReg ||= _uvFragmentReg;
-            return "tex "+targetReg.toString()+", "+uvReg.toString()+", "+inputReg.toString()+" <2d,"+filter+","+wrap+">\n";
+			uvReg ||= _sharedRegisters.uvVarying;
+            return "tex " + targetReg + ", " + uvReg + ", " + inputReg + " <2d,"+filter+","+format+wrap+">\n";
+		}
+
+		protected function getTexCubeSampleCode(vo : MethodVO, targetReg : ShaderRegisterElement, inputReg : ShaderRegisterElement, texture : TextureProxyBase, uvReg : ShaderRegisterElement) : String
+		{
+			var filter : String;
+			var format : String = getFormatStringForTexture(texture);
+			var enableMipMaps : Boolean = vo.useMipmapping && texture.hasMipMaps;
+
+			if (vo.useSmoothTextures) {
+				filter = enableMipMaps? "linear,miplinear" : "linear";
+			}else{
+				filter = enableMipMaps? "nearest,mipnearest" : "nearest";
+			}
+
+			return "tex " + targetReg + ", " + uvReg + ", " + inputReg + " <cube,"+format+filter+">\n";
+		}
+
+		private function getFormatStringForTexture(texture : TextureProxyBase) : String
+		{
+			switch (texture.format) {
+				case Context3DTextureFormat.COMPRESSED:
+					return "dxt1,";
+					break;
+				case "compressedAlpha":
+					return "dxt5,";
+					break;
+				default:
+					return "";
+			}
 		}
 
 		/**
@@ -252,17 +195,6 @@ package away3d.materials.methods
 		 */
 		public function copyFrom(method : ShadingMethodBase) : void
 		{
-		}
-
-		arcane function get tangentVaryingReg() : ShaderRegisterElement
-		{
-			return _tangentVaryingReg;
-		}
-
-
-		arcane function set tangentVaryingReg(value : ShaderRegisterElement) : void
-		{
-			_tangentVaryingReg = value;
 		}
 	}
 }

@@ -135,7 +135,7 @@
 				_geometry.addEventListener(GeometryEvent.SUB_GEOMETRY_ADDED, onSubGeometryAdded);
 				_geometry.addEventListener(GeometryEvent.SUB_GEOMETRY_REMOVED, onSubGeometryRemoved);
 				
-				var subGeoms : Vector.<SubGeometry> = _geometry.subGeometries;
+				var subGeoms : Vector.<ISubGeometry> = _geometry.subGeometries;
 
 				for (i = 0; i < subGeoms.length; ++i)
 					addSubMesh(subGeoms[i]);
@@ -209,6 +209,7 @@
 			var clone : Mesh = new Mesh(geometry, _material);
 			clone.transform = transform;
 			clone.pivotPoint = pivotPoint;
+			clone.mouseEnabled = mouseEnabled;
 			clone.partition = partition;
 			clone.bounds = _bounds.clone();
 			clone.name = name;
@@ -259,7 +260,7 @@
 		private function onSubGeometryRemoved(event : GeometryEvent) : void
 		{
 			var subMesh : SubMesh;
-			var subGeom : SubGeometry = event.subGeometry;
+			var subGeom : ISubGeometry = event.subGeometry;
 			var len : int = _subMeshes.length;
 			var i : uint;
 			
@@ -286,7 +287,7 @@
 		/**
 		 * Adds a SubMesh wrapping a SubGeometry.
 		 */
-		private function addSubMesh(subGeometry : SubGeometry) : void
+		private function addSubMesh(subGeometry : ISubGeometry) : void
 		{
 			var subMesh : SubMesh = new SubMesh(subGeometry, this, null);
 			var len : uint = _subMeshes.length;
@@ -308,7 +309,8 @@
 			for (var i : int = 0; i < len; ++i) {
 				var subMesh : SubMesh = _subMeshes[i];
 
-				if (_pickingCollider.testSubMeshCollision(subMesh, _pickingCollisionVO, shortestCollisionDistance)) {
+				var ignoreFacesLookingAway:Boolean = _material ? !_material.bothSides : true;
+				if (_pickingCollider.testSubMeshCollision(subMesh, _pickingCollisionVO, shortestCollisionDistance, ignoreFacesLookingAway)) {
 					shortestCollisionDistance = _pickingCollisionVO.rayEntryDistance;
 					_pickingCollisionVO.renderable = subMesh;
 					if (!findClosest)

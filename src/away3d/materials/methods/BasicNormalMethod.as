@@ -2,8 +2,8 @@ package away3d.materials.methods
 {
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 	import away3d.textures.Texture2DBase;
 
 	use namespace arcane;
@@ -50,7 +50,9 @@ package away3d.materials.methods
 
 		public function set normalMap(value : Texture2DBase) : void
 		{
-			if (!value || !_useTexture) invalidateShaderProgram();
+			if (Boolean(value) != _useTexture ||
+				(value && _texture && (value.hasMipMaps != _texture.hasMipMaps || value.format != _texture.format)))
+				invalidateShaderProgram();
 			_useTexture = Boolean(value);
 			_texture = value;
 		}
@@ -75,7 +77,9 @@ package away3d.materials.methods
 		{
 			_normalTextureRegister = regCache.getFreeTextureReg();
 			vo.texturesIndex = _normalTextureRegister.index;
-			return getTexSampleCode(vo,  targetReg, _normalTextureRegister);
+			return 	getTex2DSampleCode(vo,  targetReg, _normalTextureRegister, _texture) +
+					"sub " + targetReg + ".xyz, " + targetReg + ".xyz, " + _sharedRegisters.commons + ".xxx	\n" +
+					"nrm " + targetReg + ".xyz, " + targetReg + ".xyz							\n";
 		}
 	}
 }

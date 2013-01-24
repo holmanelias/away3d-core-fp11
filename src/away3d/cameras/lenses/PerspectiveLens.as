@@ -12,6 +12,7 @@ package away3d.cameras.lenses
 		private var _yMax : Number;
 		private var _xMax : Number;
 
+
 		/**
 		 * Creates a new PerspectiveLens object.
 		 * @param fieldOfView The vertical field of view of the projection.
@@ -37,6 +38,15 @@ package away3d.cameras.lenses
 			// tan(fov/2)
 			_focalLengthInv = Math.tan(_fieldOfView*Math.PI/360);
 			invalidateMatrix();
+		}
+
+		override public function clone() : LensBase
+		{
+			var clone : PerspectiveLens = new PerspectiveLens(_fieldOfView);
+			clone._near = _near;
+			clone._far = _far;
+			clone._aspectRatio = _aspectRatio;
+			return clone;
 		}
 
 		/**

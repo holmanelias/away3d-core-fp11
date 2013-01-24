@@ -7,6 +7,7 @@
 	import away3d.materials.lightpickers.LightPickerBase;
 	import away3d.textures.Texture2DBase;
 	import flash.display3D.Context3DProgramType;
+	import flash.display3D.Context3DTextureFormat;
 	import flash.display3D.Context3DVertexBufferFormat;
 	import flash.geom.Vector3D;
 
@@ -66,9 +67,10 @@
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function getVertexCode(code:String) : String
+		arcane override function getVertexCode() : String
 		{
-			code += "m44 vt7, vt0, vc0		\n" +
+			var code : String;
+			code = "m44 vt7, vt0, vc0		\n" +
 					"mul op, vt7, vc4		\n" +
 					"m44 vt1, vt0, vc5		\n" +
 					"sub v0, vt1, vc9		\n";
@@ -89,7 +91,7 @@
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function getFragmentCode() : String
+		arcane override function getFragmentCode(animationCode:String) : String
 		{
 			var code : String;
 			var wrap : String = _repeat ? "wrap" : "clamp";
@@ -105,7 +107,18 @@
 					"mul ft1, ft0.yzww, fc1	\n";
 
 			if (_alphaThreshold > 0) {
-				code += "tex ft3, v1, fs0 <2d,"+filter+","+wrap+">\n" +
+				var format : String;
+				switch (_alphaMask.format) {
+					case Context3DTextureFormat.COMPRESSED:
+						format = "dxt1,";
+						break;
+					case "compressedAlpha":
+						format ="dxt5,";
+						break;
+					default:
+						format = "";
+				}
+				code += "tex ft3, v1, fs0 <2d,"+filter+","+format+wrap+">\n" +
 						"sub ft3.w, ft3.w, fc2.x\n" +
 						"kil ft3.w\n";
 			}
@@ -118,7 +131,7 @@
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function render(renderable : IRenderable, stage3DProxy : Stage3DProxy, camera : Camera3D, lightPicker : LightPickerBase) : void
+		arcane override function render(renderable : IRenderable, stage3DProxy : Stage3DProxy, camera : Camera3D) : void
 		{
 			var pos : Vector3D = camera.scenePosition;
 
@@ -131,9 +144,9 @@
 			stage3DProxy._context3D.setProgramConstantsFromVector(Context3DProgramType.VERTEX, 9, _vertexData, 1);
 
 			if (_alphaThreshold > 0)
-				stage3DProxy.setSimpleVertexBuffer(1, renderable.getUVBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_2, renderable.UVBufferOffset);
+				renderable.activateUVBuffer(1, stage3DProxy);
 
-			super.render(renderable, stage3DProxy, camera, lightPicker);
+			super.render(renderable, stage3DProxy, camera);
 		}
 
 		/**

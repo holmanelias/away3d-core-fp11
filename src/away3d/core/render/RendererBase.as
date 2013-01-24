@@ -2,7 +2,7 @@ package away3d.core.render
 {
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
-	import away3d.core.sort.EntitySorterBase;
+	import away3d.core.sort.IEntitySorter;
 	import away3d.core.sort.RenderableMergeSort;
 	import away3d.core.traverse.EntityCollector;
 	import away3d.errors.AbstractMethodError;
@@ -34,8 +34,6 @@ package away3d.core.render
 		protected var _backgroundAlpha : Number = 1;
 		protected var _shareContext : Boolean = false;
 
-		protected var _swapBackBuffer : Boolean = true;
-
 		protected var _renderTarget : TextureBase;
 		protected var _renderTargetSurface : int;
 
@@ -43,7 +41,7 @@ package away3d.core.render
 		protected var _viewWidth : Number;
 		protected var _viewHeight : Number;
 
-		private var _renderableSorter : EntitySorterBase;
+		protected var _renderableSorter : IEntitySorter;
 		private var _backgroundImageRenderer : BackgroundImageRenderer;
 		private var _background : Texture2DBase;
 		
@@ -96,12 +94,12 @@ package away3d.core.render
 			return _renderToTexture;
 		}
 
-		public function get renderableSorter() : EntitySorterBase
+		public function get renderableSorter() : IEntitySorter
 		{
 			return _renderableSorter;
 		}
 
-		public function set renderableSorter(value : EntitySorterBase) : void
+		public function set renderableSorter(value : IEntitySorter) : void
 		{
 			_renderableSorter = value;
 		}
@@ -114,19 +112,6 @@ package away3d.core.render
 		arcane function set clearOnRender(value : Boolean) : void
 		{
 			_clearOnRender = value;
-		}
-
-		/**
-		 * Indicates whether or not the back buffer should be swapped when rendering is complete.
-		 */
-		public function get swapBackBuffer() : Boolean
-		{
-			return _swapBackBuffer;
-		}
-
-		public function set swapBackBuffer(value : Boolean) : void
-		{
-			_swapBackBuffer = value;
 		}
 
 		/**
@@ -193,8 +178,6 @@ package away3d.core.render
 				if (_stage3DProxy) _stage3DProxy.removeEventListener(Stage3DEvent.CONTEXT3D_CREATED, onContextUpdate);
 				_stage3DProxy = null;
 				_context = null;
-
-//				_contextIndex = -1;
 				return;
 			}
 			//else if (_stage3DProxy) throw new Error("A Stage3D instance was already assigned!");
@@ -253,7 +236,7 @@ package away3d.core.render
 
 			// clear buffers
 			for (var i : uint = 0; i < 8; ++i) {
-				_stage3DProxy.setSimpleVertexBuffer(i, null, null, 0);
+				_context.setVertexBufferAt(i, null);
 				_stage3DProxy.setTextureAt(i, null);
 			}
 		}
@@ -278,7 +261,7 @@ package away3d.core.render
 
 			_stage3DProxy.setRenderTarget(target, true, surfaceSelector);
 
-			if (!_shareContext && _clearOnRender) {
+			if ((target || !_shareContext) && _clearOnRender) {
 				_context.clear(_backgroundR, _backgroundG, _backgroundB, _backgroundAlpha, 1, 0);
 			}
 			_context.setDepthTest(false, Context3DCompareMode.ALWAYS);
@@ -286,16 +269,15 @@ package away3d.core.render
 			if (_backgroundImageRenderer) _backgroundImageRenderer.render();
 
 			draw(entityCollector, target);
-
-			_context.setDepthTest(false, Context3DCompareMode.LESS);
-
+			
+			//line required for correct rendering when using away3d with starling. DO NOT REMOVE UNLESS STARLING INTEGRATION IS RETESTED!
+			_context.setDepthTest(false, Context3DCompareMode.LESS_EQUAL);
+			
 			if ( !_shareContext ) {
 				if( _snapshotRequired && _snapshotBitmapData ) {
-					_context.drawToBitmapData( _snapshotBitmapData );
+					_context.drawToBitmapData(_snapshotBitmapData);
 					_snapshotRequired = false;
 				}
-	
-				if (_swapBackBuffer && !target) _context.present();
 			}
 			_stage3DProxy.scissorRect = null;
 		}
@@ -328,8 +310,6 @@ package away3d.core.render
 		private function onContextUpdate(event : Event) : void
 		{
 			_context = _stage3DProxy.context3D;
-
-//			_contextIndex = _stage3DProxy.stage3DIndex;
 		}
 
 		arcane function get backgroundAlpha() : Number

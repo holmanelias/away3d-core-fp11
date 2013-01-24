@@ -3,8 +3,8 @@ package away3d.materials.methods
 	import away3d.arcane;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.materials.methods.MethodVO;
-	import away3d.materials.utils.ShaderRegisterCache;
-	import away3d.materials.utils.ShaderRegisterElement;
+	import away3d.materials.compilation.ShaderRegisterCache;
+	import away3d.materials.compilation.ShaderRegisterElement;
 	import away3d.textures.Texture2DBase;
 	
 	import flash.display3D.Context3D;
@@ -31,6 +31,7 @@ package away3d.materials.methods
 		arcane var _specularR : Number = 1, _specularG : Number = 1, _specularB : Number = 1;
 		private var _shadowRegister : ShaderRegisterElement;
 		private var _shadingModel:String;
+		protected var _isFirstLight : Boolean;
 
 		
 		/**
@@ -127,7 +128,9 @@ package away3d.materials.methods
 
 		public function set texture(value : Texture2DBase) : void
 		{
-			if (!value || !_useTexture) invalidateShaderProgram();
+			if (Boolean(value) != _useTexture ||
+				(value && _texture && (value.hasMipMaps != _texture.hasMipMaps || value.format != _texture.format)))
+				invalidateShaderProgram();
 			_useTexture = Boolean(value);
 			_texture = value;
 		}
@@ -164,6 +167,8 @@ package away3d.materials.methods
 		{
 			var code : String = "";
 
+			_isFirstLight = true;
+
 			if (vo.numLights > 0) {
 				_specularDataRegister = regCache.getFreeFragmentConstant();
 				vo.fragmentConstantsIndex = _specularDataRegister.index*4;
@@ -173,7 +178,7 @@ package away3d.materials.methods
 					regCache.addFragmentTempUsages(_specularTexData, 1);
 					_specularTextureRegister = regCache.getFreeTextureReg();
 					vo.texturesIndex = _specularTextureRegister.index;
-					code = getTexSampleCode(vo, _specularTexData, _specularTextureRegister);
+					code = getTex2DSampleCode(vo, _specularTexData, _specularTextureRegister, _texture);
 				}
 				else
 					_specularTextureRegister = null;
@@ -188,51 +193,55 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		override arcane function getFragmentCodePerLight(vo : MethodVO, lightIndex : int, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
+		override arcane function getFragmentCodePerLight(vo : MethodVO, lightDirReg : ShaderRegisterElement, lightColReg : ShaderRegisterElement, regCache : ShaderRegisterCache) : String
 		{
 			var code : String = "";
 			var t : ShaderRegisterElement;
-			
-			if (lightIndex > 0) {
+
+			if (_isFirstLight)
+				t = _totalLightColorReg;
+			else {
 				t = regCache.getFreeFragmentVectorTemp();
 				regCache.addFragmentTempUsages(t, 1);
 			}
-			else t = _totalLightColorReg;
-			
+
+			var viewDirReg : ShaderRegisterElement = _sharedRegisters.viewDirFragment;
+			var normalReg : ShaderRegisterElement  = _sharedRegisters.normalFragment;
+
 			switch (_shadingModel) {
 				case SpecularShadingModel.BLINN_PHONG:
-					
+
 					// half vector
-					code += "add " + t + ".xyz, " + lightDirReg + ".xyz, " + _viewDirFragmentReg + ".xyz\n" +
+					code += "add " + t + ".xyz, " + lightDirReg + ".xyz, " + viewDirReg + ".xyz\n" +
 							"nrm " + t + ".xyz, " + t + ".xyz\n" +
-							"dp3 " + t + ".w, " + _normalFragmentReg + ".xyz, " + t + ".xyz\n" +
+							"dp3 " + t + ".w, " + normalReg + ".xyz, " + t + ".xyz\n" +
 							"sat " + t + ".w, " + t + ".w\n";
-					
+
 					break;
 				case SpecularShadingModel.PHONG:
-					
+
 					// phong model
-					code += "dp3 " + t + ".w, " + lightDirReg + ".xyz, " + _normalFragmentReg + ".xyz\n" + // sca1 = light.normal
-					
-							//find the reflected light vector R
+					code += "dp3 " + t + ".w, " + lightDirReg + ".xyz, " + normalReg + ".xyz\n" + // sca1 = light.normal
+
+						//find the reflected light vector R
 							"add " + t + ".w, " + t + ".w, " + t + ".w\n" + // sca1 = sca1*2
-							"mul " + t + ".xyz, " + _normalFragmentReg + ".xyz, " + t + ".w\n" + // vec1 = normal*sca1
+							"mul " + t + ".xyz, " + normalReg + ".xyz, " + t + ".w\n" + // vec1 = normal*sca1
 							"sub " + t + ".xyz, " + t + ".xyz, " + lightDirReg + ".xyz\n" + // vec1 = vec1 - light (light vector is negative)
-							
-							//smooth the edge as incidence angle approaches 90
-							"add" + t + ".w, " + t + ".w, " + _normalFragmentReg + ".w\n" + // sca1 = sca1 + smoothtep;
-							//"div" + t + ".w, " + t + ".w, " + _specularDataRegister2 + ".z\n" + // sca1 = sca1/smoothtep;
+
+						//smooth the edge as incidence angle approaches 90
+							"add" + t + ".w, " + t + ".w, " + _sharedRegisters.commons + ".w\n" + // sca1 = sca1 + smoothtep;
+						//"div" + t + ".w, " + t + ".w, " + _specularDataRegister2 + ".z\n" + // sca1 = sca1/smoothtep;
 							"sat " + t + ".w, " + t + ".w\n" + // sca1 range 0 - 1
 							"mul " + t + ".xyz, " + t + ".xyz, " + t + ".w\n" + // vec1 = vec1*sca1
-							
-							//find the dot product between R and V
-							"dp3 " + t + ".w, " + t + ".xyz, " + _viewDirFragmentReg + ".xyz\n" + // sca1 = vec1.view
+
+						//find the dot product between R and V
+							"dp3 " + t + ".w, " + t + ".xyz, " + viewDirReg + ".xyz\n" + // sca1 = vec1.view
 							"sat " + t + ".w, " + t + ".w\n";
-					
+
 					break;
 				default:
 			}
-			
+
 			if (_useTexture) {
 				// apply gloss modulation from texture
 				code += "mul " + _specularTexData + ".w, " + _specularTexData + ".y, " + _specularDataRegister + ".w\n" +
@@ -240,18 +249,20 @@ package away3d.materials.methods
 			}
 			else
 				code += "pow " + t + ".w, " + t + ".w, " + _specularDataRegister + ".w\n";
-			
+
 			// attenuate
 			code += "mul " + t + ".w, " + t + ".w, " + lightDirReg + ".w\n";
 
-			if (_modulateMethod != null) code += _modulateMethod(vo, t, regCache);
+			if (_modulateMethod != null) code += _modulateMethod(vo, t, regCache, _sharedRegisters);
 
 			code += "mul " + t + ".xyz, " + lightColReg + ".xyz, " + t + ".w\n";
-				
-			if (lightIndex > 0) {
+
+			if (!_isFirstLight) {
 				code += "add " + _totalLightColorReg + ".xyz, " + _totalLightColorReg + ".xyz, " + t + ".xyz\n";
 				regCache.removeFragmentTempUsage(t);
 			}
+
+			_isFirstLight = false;
 
 			return code;
 		}
@@ -259,29 +270,36 @@ package away3d.materials.methods
 		/**
 		 * @inheritDoc
 		 */
-		arcane override function getFragmentCodePerProbe(vo : MethodVO, lightIndex : int, cubeMapReg : ShaderRegisterElement, weightRegister : String, regCache : ShaderRegisterCache) : String
+		arcane override function getFragmentCodePerProbe(vo : MethodVO, cubeMapReg : ShaderRegisterElement, weightRegister : String, regCache : ShaderRegisterCache) : String
 		{
 			var code : String = "";
 			var t : ShaderRegisterElement;
 
-			// todo: add property that defines the indexing mode of the probe map: through view vector or reflectance vector
-
 			// write in temporary if not first light, so we can add to total diffuse colour
-			if (lightIndex > 0) {
+			if (_isFirstLight)
+				t = _totalLightColorReg;
+			else {
 				t = regCache.getFreeFragmentVectorTemp();
 				regCache.addFragmentTempUsages(t, 1);
 			}
-			else {
-				t = _totalLightColorReg;
-			}
 
-			code += "tex " + t + ", " + _viewDirFragmentReg + ", " + cubeMapReg + " <cube,linear,miplinear>\n" +
-					"mul " + t + ", " + t + ", " + weightRegister + "\n";
+			var normalReg : ShaderRegisterElement = _sharedRegisters.normalFragment;
+			var viewDirReg : ShaderRegisterElement = _sharedRegisters.viewDirFragment;
+			code += "dp3 " + t + ".w, " + normalReg + ".xyz, " + viewDirReg + ".xyz\n" +
+					"add " + t + ".w, " + t + ".w, " + t + ".w\n" +
+					"mul " + t + ", " + t + ".w, " + normalReg + "\n" +
+					"sub " + t + ", " + t + ", " + viewDirReg + "\n" +
+					"tex " + t + ", " + t + ", " + cubeMapReg + " <cube," + (vo.useSmoothTextures? "linear" : "nearest") + ",miplinear>\n" +
+					"mul " + t + ".xyz, " + t + ".xyz, " + weightRegister + "\n";
 
-			if (lightIndex > 0) {
+			if (_modulateMethod != null) code += _modulateMethod(vo, t, regCache, _sharedRegisters);
+
+			if (!_isFirstLight) {
 				code += "add " + _totalLightColorReg + ".xyz, " + _totalLightColorReg + ".xyz, " + t + ".xyz\n";
 				regCache.removeFragmentTempUsage(t);
 			}
+
+			_isFirstLight = false;
 
 			return code;
 		}

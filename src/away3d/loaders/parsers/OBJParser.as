@@ -1,11 +1,9 @@
 package away3d.loaders.parsers
 {
-	import flash.net.URLRequest;
-	import flash.utils.ByteArray;
-	
 	import away3d.arcane;
+	import away3d.core.base.CompactSubGeometry;
 	import away3d.core.base.Geometry;
-	import away3d.core.base.SubGeometry;
+	import away3d.core.base.ISubGeometry;
 	import away3d.core.base.data.UV;
 	import away3d.core.base.data.Vertex;
 	import away3d.entities.Mesh;
@@ -17,8 +15,10 @@ package away3d.loaders.parsers
 	import away3d.materials.TextureMaterial;
 	import away3d.materials.methods.BasicSpecularMethod;
 	import away3d.materials.utils.DefaultMaterialManager;
-	import away3d.textures.BitmapTexture;
 	import away3d.textures.Texture2DBase;
+	import away3d.tools.utils.GeomUtil;
+	
+	import flash.net.URLRequest;
 
 	use namespace arcane;
 	
@@ -57,9 +57,9 @@ package away3d.loaders.parsers
 		 * @param uri The url or id of the data or file to be parsed.
 		 * @param extra The holder for extra contextual data that the parser might need.
 		 */
-		public function OBJParser(scale:Number = 1, format: String = ParserDataFormat.PLAIN_TEXT)
+		public function OBJParser(scale:Number = 1, dataFormat: String = ParserDataFormat.PLAIN_TEXT)
 		{
-			super(format);
+			super(dataFormat);
 			_scale = scale;
 		}
 		
@@ -144,7 +144,6 @@ package away3d.loaders.parsers
 			} else {
 				var lm:LoadedMaterial = new LoadedMaterial();
 				lm.materialID = resourceDependency.id;
-				lm.texture = DefaultMaterialManager.getDefaultTexture();
 				_materialLoaded.push(lm);
 			}
 		
@@ -240,9 +239,10 @@ package away3d.loaders.parsers
 					break;
 				case "usemtl":
 					if(_mtlLib){
+						if(!trunk[1]) trunk[1] = "def000";
 						_materialIDs.push(trunk[1]);
 						_activeMaterialID = trunk[1];
-						if(_currentGroup) _currentGroup.materialID= _activeMaterialID;
+						if(_currentGroup) _currentGroup.materialID = _activeMaterialID;
 					}
 					break;
 				case "v":
@@ -290,7 +290,7 @@ package away3d.loaders.parsers
 					// Finalize and force type-based name
 					finalizeAsset(geometry, "");
 					
-					bmMaterial = DefaultMaterialManager.getDefaultMaterial();
+					bmMaterial = new TextureMaterial(DefaultMaterialManager.getDefaultTexture());
 					mesh = new Mesh(geometry, bmMaterial);
 					
 					if (_objects[objIndex].name) {
@@ -335,7 +335,7 @@ package away3d.loaders.parsers
 			var face:FaceData;
 			var numFaces:uint = faces.length;
 			var numVerts:uint;
-			var subs : Vector.<SubGeometry>;
+			var subs : Vector.<ISubGeometry>;
 			
 			var vertices:Vector.<Number> = new Vector.<Number>();
 			var uvs:Vector.<Number> = new Vector.<Number>();
@@ -356,7 +356,7 @@ package away3d.loaders.parsers
 				}
 			}
 			
-			subs = constructSubGeometries(vertices, indices, uvs, normals, null, null, null);
+			subs = GeomUtil.fromVectors(vertices, indices, uvs, normals, null, null, null);
 			for (i=0; i<subs.length; i++) {
 				geometry.addSubGeometry(subs[i]);
 			}
@@ -403,7 +403,6 @@ package away3d.loaders.parsers
 				}
 
 			} else {
-				
 				index = _realIndices[face.indexIds[vertexIndex]] - 1;
 			}
 			
@@ -548,15 +547,15 @@ package away3d.loaders.parsers
 				for(j = 0;j<lines.length;++j){
 					lines[j] = lines[j].replace(/\s+$/,"");
 					
-					if(lines[j].substring(0,1) != "#" && lines[j] != ""){
+					if(lines[j].substring(0,1) != "#" && (j == 0 || lines[j] != "") ){
 						trunk = lines[j].split(" ");
 						
 						if(String(trunk[0]).charCodeAt(0) == 9 || String(trunk[0]).charCodeAt(0) == 32)
 							trunk[0] = trunk[0].substring(1, trunk[0].length);
 						
 						if(j == 0){
-							
 							_lastMtlID = trunk.join("");
+							_lastMtlID = (_lastMtlID == "")? "def000" : _lastMtlID;
 							
 						} else {
 							
@@ -719,7 +718,8 @@ package away3d.loaders.parsers
 					if(lm.cm){
 						if(mesh.material) mesh.material = null;
 						mesh.material = lm.cm;
-					} else {
+
+					} else if(lm.texture){
 						mat = TextureMaterial(mesh.material);
 						mat.texture = lm.texture;
 						mat.ambientColor = lm.ambientColor;

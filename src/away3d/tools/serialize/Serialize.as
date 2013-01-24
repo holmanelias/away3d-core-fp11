@@ -1,6 +1,5 @@
 package away3d.tools.serialize
 {
-	import away3d.animators.SkeletonAnimationState;
 	import away3d.animators.IAnimator;
 	import away3d.animators.data.JointPose;
 	import away3d.animators.data.Skeleton;
@@ -9,6 +8,7 @@ package away3d.tools.serialize
 	import away3d.arcane;
 	import away3d.containers.ObjectContainer3D;
 	import away3d.containers.Scene3D;
+	import away3d.core.base.ISubGeometry;
 	import away3d.core.base.SkinnedSubGeometry;
 	import away3d.core.base.SubGeometry;
 	import away3d.core.base.SubMesh;
@@ -119,7 +119,7 @@ package away3d.tools.serialize
 			serializer.endObject();
 		}
 		
-		public static function serializeSubGeometry(subGeometry:SubGeometry, serializer:SerializerBase):void
+		public static function serializeSubGeometry(subGeometry:ISubGeometry, serializer:SerializerBase):void
 		{
 			serializer.beginObject(classNameFromInstance(subGeometry), null);
 			serializer.writeUint("numTriangles", subGeometry.numTriangles);
@@ -181,13 +181,6 @@ package away3d.tools.serialize
 			{
 				serializeJointPose(jointPose, serializer);
 			}
-			serializer.endObject();
-		}
-		
-		public static function serializeSkeletonAnimationState(skeletonAnimationState:SkeletonAnimationState, serializer:SerializerBase):void
-		{
-			serializer.beginObject(classNameFromInstance(skeletonAnimationState), skeletonAnimationState.name);
-			//TODO: add animation nodes to serialiser
 			serializer.endObject();
 		}
 		
