@@ -209,12 +209,14 @@
 			var clone : Mesh = new Mesh(geometry, _material);
 			clone.transform = transform;
 			clone.pivotPoint = pivotPoint;
-			clone.mouseEnabled = mouseEnabled;
 			clone.partition = partition;
 			clone.bounds = _bounds.clone();
 			clone.name = name;
 			clone.castsShadows = castsShadows;
 			clone.mouseEnabled = mouseEnabled;
+			clone.mouseChildren = mouseChildren;
+			clone.extra = extra;
+			clone.pickingCollider = pickingCollider;
 
 			var len : int = _subMeshes.length;
 			for (var i : int = 0; i < len; ++i) {
